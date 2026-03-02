@@ -1,4 +1,4 @@
-# visualization on brain explorer
+# UCSC Brain Exploer visualization of mapping new data to existing reference
 
 {browser_url}/pyramid/?image={ref}&overlay={arrowfile_url}
 
