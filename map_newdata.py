@@ -30,7 +30,7 @@ ipca = joblib.load(pca_model_file)
 pumap = umap_pytorch.load_pumap(pumap_model_file)
 
 # read uce result back
-adata = anndata.read_h5ad(uce_adata_file, backed='r')
+adata = anndata.read_h5ad(uce_adata_file, backed='r') # use backed mode to skip loading .X gene expression matrix, save time and memory
 uce = adata.obsm["X_uce"]
 obs = adata.obs
 
