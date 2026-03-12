@@ -45,12 +45,21 @@ X_umap_pytorch.shape
 
 X_swapped = X_umap_pytorch @ swap_xy_matrix
 
+# Auto-detect categorical columns: exclude those with 1 or >100 unique values
+cat_cols = {}
+for col in obs.columns:
+    if hasattr(obs[col], 'dtype') and (
+        str(obs[col].dtype) == 'category' or obs[col].dtype == object
+    ):
+        n_unique = obs[col].nunique()
+        if 1 < n_unique <= 100:
+            cat_cols[col] = pa.array(obs[col].astype("category"))
+
 # Convert to Arrow Table
-cell_type = pa.array(obs["cell_type"].astype("category"))
 table = pa.table({
     "x": X_swapped[:, 0],
     "y": X_swapped[:, 1],
-    "cell_type":cell_type
+    **cat_cols
     })
 
 # Save arrow file
