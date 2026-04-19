@@ -90,8 +90,8 @@ select_cols = ['disease', 'disease_ontology_term_id',
                'tissue_type',
                'dataset_id',
                'is_primary_data',
-               'harmonized_cell_type_ontology_term_id',
-               'harmonized_cell_type',
+               'harmonized_cell_label_ontology_term_id',
+               'harmonized_cell_label',
                ]
 
 def get_ucsc_dataset_ids():
@@ -159,7 +159,7 @@ for singleDir in data_dirs:
             if file.endswith('.npy'):
                 dataset_id = file.removesuffix("_uce.npy").removesuffix("_scimilarity.npy")
                 match = re.match(r'^((?:ucsc-)?[a-f0-9\-]+)_', file)
-                real_dataset_id = match.group(1)      
+                real_dataset_id = match.group(1) if match else dataset_id
 
                 if len(select_datasets) !=0 and real_dataset_id not in select_datasets:
                     continue
@@ -183,12 +183,16 @@ for singleDir in data_dirs:
                     if os.path.exists(remap_filepath) and os.path.exists(mapped_filepath) and os.path.exists(doc_filepath):
                         print(f"  Harmonizing {dataset_id} from {mapped_filepath}")
                         mapped_obs = pd.read_csv(mapped_filepath, sep='\t', low_memory=False)
-                        obs["harmonized_cell_type_ontology_term_id"] = mapped_obs["mapped_cell_label_ontology_term_id"].values
-                        obs["harmonized_cell_type"] = mapped_obs["mapped_cell_label"].values
+                        obs["harmonized_cell_label_ontology_term_id"] = mapped_obs["mapped_cell_label_ontology_term_id"].values
+                        obs["harmonized_cell_label"] = mapped_obs["mapped_cell_label"].values
                         harmonized_datasets.append((real_dataset_id, dataset_id, mapped_filepath, doc_filepath))
                     else:
-                        obs["harmonized_cell_type_ontology_term_id"] = obs["cell_type_ontology_term_id"]
-                        obs["harmonized_cell_type"] = obs["cell_type"]
+                        if "harmonized_cell_label_ontology_term_id" in obs.columns:
+                            obs["harmonized_cell_label_ontology_term_id"] = obs["harmonized_cell_label_ontology_term_id"]
+                            obs["harmonized_cell_label"] = obs["harmonized_cell_label"]
+                        else:
+                            obs["harmonized_cell_label_ontology_term_id"] = obs["cell_type_ontology_term_id"]
+                            obs["harmonized_cell_label"] = obs["cell_type"]
                         fallback_datasets.append((real_dataset_id, dataset_id))
 
                     # First condition: no NaNs in the row
@@ -217,14 +221,6 @@ for singleDir in data_dirs:
                             obs.rename(columns={"Unnamed: 0": "old_index"}, inplace=True)
                             obs.set_index('new_index', inplace=True)
                             obs = obs.assign(dataset_id = real_dataset_id)
-                            # modify ucsc dataset cell_type and cell_type_terminoloyg_id
-                            if dataset_id in ucsc_datasets:
-                                if "cell_type" in ucscInfo.columns:
-                                    column =  ucscInfo.at[dataset_id, "cell_type"]
-                                    obs["cell_type"] = obs[column]
-                                if "cell_type_ontology_term_id" in ucscInfo.columns:
-                                    column =  ucscInfo.at[dataset_id, "cell_type_ontology_term_id"]
-                                    obs["cell_type_ontology_term_id"] = obs[column]
                             if len(select_datasets) ==0: # for combining all datasets, have to select columns
                                 cols_to_use = [c for c in select_cols if c in obs.columns]
                                 obs = obs[cols_to_use]
