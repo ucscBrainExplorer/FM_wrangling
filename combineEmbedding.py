@@ -31,8 +31,20 @@ parser.add_argument(
     default=False,
     help="Only process embedding files, skip obs metadata"
 )
+parser.add_argument(
+    "--shuffle",
+    action="store_true",
+    default=False,
+    help="Shuffle cells in the combined output. Must not be used with --obs-only or --uce-only."
+)
 
 args = parser.parse_args()
+
+if args.shuffle and (args.obs_only or args.uce_only):
+    print("ERROR: --shuffle cannot be used with --obs-only or --uce-only — obs and uce must be written together to stay in sync.")
+    sys.exit(1)
+
+shuffle = args.shuffle
 embedding = args.embedding
 results_dir = args.results_dir
 
@@ -72,8 +84,9 @@ ignore_file = "datasetLists/ignore_datasets.txt"
 dataset_list = []
 obs_list =[]
 cellCount = 0
-harmonized_datasets = []   # (real_dataset_id, dataset_id, mapped_filepath, doc_filepath) — used cell label harmonization
-fallback_datasets = []     # (real_dataset_id, dataset_id) — fell back to cell_type
+harmonized_datasets = []       # (real_dataset_id, dataset_id, mapped_filepath, doc_filepath) — remap file used
+ucsc_harmonized_datasets = []  # (real_dataset_id, dataset_id) — ucsc harmonized_cell_label used
+fallback_datasets = []         # (real_dataset_id, dataset_id) — fell back to CellxGene cell_type
 arr_dtype = np.dtype('float32')
 counter = 0
 select_cols = ['disease', 'disease_ontology_term_id',
@@ -92,6 +105,7 @@ select_cols = ['disease', 'disease_ontology_term_id',
                'is_primary_data',
                'harmonized_cell_label_ontology_term_id',
                'harmonized_cell_label',
+               'harmonized_cell_label_source',
                ]
 
 def get_ucsc_dataset_ids():
@@ -152,98 +166,110 @@ if not obs_only:
                                    )
 
 for singleDir in data_dirs:
-    for root, dirs, files in os.walk(singleDir):
-        for file in files:
-            #if counter >1:
-            #    break
-            if file.endswith('.npy'):
-                dataset_id = file.removesuffix("_uce.npy").removesuffix("_scimilarity.npy")
-                match = re.match(r'^((?:ucsc-)?[a-f0-9\-]+)_', file)
-                real_dataset_id = match.group(1) if match else dataset_id
+    # When select_datasets is provided, iterate in its order to guarantee deterministic row ordering.
+    # When combining all datasets, walk the filesystem (order is non-deterministic — use --shuffle for randomization).
+    if len(select_datasets) > 0:
+        all_files = [f"{ds_id}_{embedding}.npy" for ds_id in select_datasets]
+    else:
+        _, _, walked_files = next(os.walk(singleDir))
+        all_files = sorted(f for f in walked_files if f.endswith('.npy'))
 
-                if len(select_datasets) !=0 and real_dataset_id not in select_datasets:
-                    continue
-                if len(select_datasets) ==0 and real_dataset_id in ignore_datasets:
-                    continue
-                
-                print (singleDir, dataset_id)
-                if dataset_id not in dataset_list:
-                    dataset_list.append(dataset_id)
+    for file in all_files:
+        if not os.path.exists(os.path.join(singleDir, file)):
+            print(f"  WARNING: {file} not found in {singleDir}, skipping")
+            continue
+        dataset_id = file.removesuffix("_uce.npy").removesuffix("_scimilarity.npy")
+        match = re.match(r'^((?:ucsc-)?[a-f0-9\-]+)_', file)
+        real_dataset_id = match.group(1) if match else dataset_id
 
-                    uce_filepath = os.path.join(singleDir, file)
-                    uce  = np.load(uce_filepath)
-                    obs_filepath = os.path.join(singleDir, dataset_id+"_obs.tsv")
-                    obs = pd.read_csv(obs_filepath, sep='\t', low_memory=False)
+        if len(select_datasets) == 0 and real_dataset_id in ignore_datasets:
+            continue
 
-                    # Auto-detect harmonization: if a remap file exists, load the
-                    # mapped obs and add harmonized_cell_type* columns.
-                    remap_filepath = os.path.join(singleDir, dataset_id+"_remap.tsv")
-                    mapped_filepath = os.path.join(singleDir, dataset_id+"_obs_mapped.tsv.gz")
-                    doc_filepath = os.path.join(singleDir, dataset_id+"_obs_mapped_doc.txt")
-                    if os.path.exists(remap_filepath) and os.path.exists(mapped_filepath) and os.path.exists(doc_filepath):
-                        print(f"  Harmonizing {dataset_id} from {mapped_filepath}")
-                        mapped_obs = pd.read_csv(mapped_filepath, sep='\t', low_memory=False)
-                        obs["harmonized_cell_label_ontology_term_id"] = mapped_obs["mapped_cell_label_ontology_term_id"].values
-                        obs["harmonized_cell_label"] = mapped_obs["mapped_cell_label"].values
-                        harmonized_datasets.append((real_dataset_id, dataset_id, mapped_filepath, doc_filepath))
-                    else:
-                        if "harmonized_cell_label_ontology_term_id" in obs.columns:
-                            obs["harmonized_cell_label_ontology_term_id"] = obs["harmonized_cell_label_ontology_term_id"]
-                            obs["harmonized_cell_label"] = obs["harmonized_cell_label"]
-                        else:
-                            obs["harmonized_cell_label_ontology_term_id"] = obs["cell_type_ontology_term_id"]
-                            obs["harmonized_cell_label"] = obs["cell_type"]
-                        fallback_datasets.append((real_dataset_id, dataset_id))
+        print(singleDir, dataset_id)
+        if dataset_id not in dataset_list:
+            dataset_list.append(dataset_id)
 
-                    # First condition: no NaNs in the row
-                    mask_uce = ~np.isnan(uce).any(axis=1) # Keep rows where no NaN is present
-                    # Second condition: 'is_primary_data' column is True
-                    if "is_primary_data" in obs.columns and \
-                       dataset_id not in ucsc_datasets and \
-                       dataset_id not in cgCensus_non_primary_datasets :
-                        mask_primary = (obs["is_primary_data"] == True).values
-                    else:
-                        mask_primary = np.ones(len(obs), dtype=bool)  # Keep all rows if column doesn't exist
-                    
-                    # Combine the two condition masks
-                    combined_mask = mask_uce & mask_primary
-                    if combined_mask.sum() > 1:
-                        counter = counter + 1
-                        uce = uce[combined_mask]
-                        obs = obs[combined_mask]
+            uce_filepath = os.path.join(singleDir, file)
+            uce  = np.load(uce_filepath)
+            obs_filepath = os.path.join(singleDir, dataset_id+"_obs.tsv")
+            obs = pd.read_csv(obs_filepath, sep='\t', low_memory=False)
 
-                        cellCount = cellCount + uce.shape[0]
-                        print (counter, "total cell count:", cellCount)
-
-                        # handle obs: index
-                        if not uce_only:
-                            obs['new_index'] = real_dataset_id + "_" + obs.index.astype(str)
-                            obs.rename(columns={"Unnamed: 0": "old_index"}, inplace=True)
-                            obs.set_index('new_index', inplace=True)
-                            obs = obs.assign(dataset_id = real_dataset_id)
-                            if len(select_datasets) ==0: # for combining all datasets, have to select columns
-                                cols_to_use = [c for c in select_cols if c in obs.columns]
-                                obs = obs[cols_to_use]
-                            # add collection info
-                            if dataset_id not in ucsc_datasets:
-                                obs["collection_doi_label"] = cxgInfo[cxgInfo.dataset_id == dataset_id]["collection_doi_label"].values[0]
-                                obs["collection_doi"] = cxgInfo[cxgInfo.dataset_id == dataset_id]["collection_doi"].values[0]
-                                obs["dataset_title"] = cxgInfo[cxgInfo.dataset_id == dataset_id]["dataset_title"].values[0]
-                            else:
-                                obs["collection_doi"] = ucscInfo.at[dataset_id, "collection_doi"]
-                                obs["collection_doi_label"] = ucscInfo.at[dataset_id, "collection_doi_label"]
-                                obs["dataset_title"] = ucscInfo.at[dataset_id, "dataset_title"]
-                            obs_list.append(obs)
-                                                    
-                        ## export to dest_uce, one numpy array at a time concatenate at the end, memory efficient and fast
-                        if not obs_only:
-                            dset_uce.resize(dset_uce.shape[0] + uce.shape[0], axis=0)
-                            dset_uce[-uce.shape[0]:] = uce
-                        
-                    else:
-                        print ("All embedding data are NaN (very rare) or is_primary_data are all False (more likely)")
+            # Auto-detect harmonization: if a remap file exists, load the
+            # mapped obs and add harmonized_cell_type* columns.
+            remap_filepath = os.path.join(singleDir, dataset_id+"_remap.tsv")
+            mapped_filepath = os.path.join(singleDir, dataset_id+"_obs_mapped.tsv.gz")
+            # look for doc in two patterns: remap doc or scPCA report
+            doc_filepath = os.path.join(singleDir, dataset_id+"_obs_mapped_doc.txt")
+            if not os.path.exists(doc_filepath):
+                doc_filepath = os.path.join(singleDir, dataset_id+".report.md")
+            if os.path.exists(remap_filepath) and os.path.exists(mapped_filepath) and os.path.exists(doc_filepath):
+                print(f"  Harmonizing {dataset_id} from {mapped_filepath}")
+                mapped_obs = pd.read_csv(mapped_filepath, sep='\t', low_memory=False)
+                obs["harmonized_cell_label_ontology_term_id"] = mapped_obs["mapped_cell_label_ontology_term_id"].values
+                obs["harmonized_cell_label"] = mapped_obs["mapped_cell_label"].values
+                obs["harmonized_cell_label_source"] = "ucsc"
+                harmonized_datasets.append((real_dataset_id, dataset_id, mapped_filepath, doc_filepath))
+            else:
+                if "harmonized_cell_label_ontology_term_id" in obs.columns:
+                    obs["harmonized_cell_label_ontology_term_id"] = obs["harmonized_cell_label_ontology_term_id"]
+                    obs["harmonized_cell_label"] = obs["harmonized_cell_label"]
+                    obs["harmonized_cell_label_source"] = "ucsc"
+                    ucsc_harmonized_datasets.append((real_dataset_id, dataset_id, doc_filepath))
                 else:
-                    print ("Duplicate dataset")
+                    obs["harmonized_cell_label_ontology_term_id"] = obs["cell_type_ontology_term_id"]
+                    obs["harmonized_cell_label"] = obs["cell_type"]
+                    obs["harmonized_cell_label_source"] = "cell_type"
+                    fallback_datasets.append((real_dataset_id, dataset_id))
+
+            # First condition: no NaNs in the row
+            mask_uce = ~np.isnan(uce).any(axis=1) # Keep rows where no NaN is present
+            # Second condition: 'is_primary_data' column is True
+            if "is_primary_data" in obs.columns and \
+               dataset_id not in ucsc_datasets and \
+               dataset_id not in cgCensus_non_primary_datasets :
+                mask_primary = (obs["is_primary_data"] == True).values
+            else:
+                mask_primary = np.ones(len(obs), dtype=bool)  # Keep all rows if column doesn't exist
+            
+            # Combine the two condition masks
+            combined_mask = mask_uce & mask_primary
+            if combined_mask.sum() > 1:
+                counter = counter + 1
+                uce = uce[combined_mask]
+                obs = obs[combined_mask]
+
+                cellCount = cellCount + uce.shape[0]
+                print (counter, "total cell count:", cellCount)
+
+                # handle obs: index
+                if not uce_only:
+                    obs['new_index'] = real_dataset_id + "_" + obs.index.astype(str)
+                    obs.rename(columns={"Unnamed: 0": "old_index"}, inplace=True)
+                    obs.set_index('new_index', inplace=True)
+                    obs = obs.assign(dataset_id = real_dataset_id)
+                    if len(select_datasets) ==0: # for combining all datasets, have to select columns
+                        cols_to_use = [c for c in select_cols if c in obs.columns]
+                        obs = obs[cols_to_use]
+                    # add collection info
+                    if dataset_id not in ucsc_datasets:
+                        obs["collection_doi_label"] = cxgInfo[cxgInfo.dataset_id == dataset_id]["collection_doi_label"].values[0]
+                        obs["collection_doi"] = cxgInfo[cxgInfo.dataset_id == dataset_id]["collection_doi"].values[0]
+                        obs["dataset_title"] = cxgInfo[cxgInfo.dataset_id == dataset_id]["dataset_title"].values[0]
+                    else:
+                        obs["collection_doi"] = ucscInfo.at[dataset_id, "collection_doi"]
+                        obs["collection_doi_label"] = ucscInfo.at[dataset_id, "collection_doi_label"]
+                        obs["dataset_title"] = ucscInfo.at[dataset_id, "dataset_title"]
+                    obs_list.append(obs)
+                                            
+                ## export to dest_uce, one numpy array at a time concatenate at the end, memory efficient and fast
+                if not obs_only:
+                    dset_uce.resize(dset_uce.shape[0] + uce.shape[0], axis=0)
+                    dset_uce[-uce.shape[0]:] = uce
+                
+            else:
+                print ("All embedding data are NaN (very rare) or is_primary_data are all False (more likely)")
+        else:
+            print ("Duplicate dataset")
 if not obs_only:
     fuce.close()
 
@@ -253,8 +279,22 @@ if not uce_only:
 
     ## shape
     num_cols = combined_obs.shape[1]
-
     print ("combined obs shape:", (cellCount, num_cols))
+
+    if shuffle:
+        print("Shuffling cells...")
+        idx = np.random.permutation(len(combined_obs))
+        np.save(os.path.join(results_dir, "shuffle_index.npy"), idx)
+        print(f"Shuffle index saved to {os.path.join(results_dir, 'shuffle_index.npy')}")
+        combined_obs = combined_obs.iloc[idx].reset_index(drop=True)
+        # shuffle uce in sync using same index
+        uce_path = os.path.join(results_dir, embedding_outfile)
+        with h5py.File(uce_path, "r") as f:
+            uce_data = f["data"][:]
+        uce_data = uce_data[idx]
+        with h5py.File(uce_path, "w") as f:
+            f.create_dataset("data", data=uce_data)
+        print("Shuffle complete.")
 
     #export combined_obs
     combined_obs.to_csv(os.path.join(results_dir, obs_outfile), sep='\t')
@@ -288,15 +328,12 @@ with open(wrangling_notes_path, "w") as wf:
     wf.write("Add column 'collection_doi', populate with publication doi from source data\n")
     wf.write("Add column 'collection_doi_label', populate with publication doi label from source data\n")
     wf.write("Add column 'dataset_title', populate with dataset title from source data\n")
-    wf.write("Add column 'harmonized_cell_type', initialized from 'cell_type'; "
-             "overwritten from 'mapped_cell_label' for datasets with cell label harmonization output "
-             "(*_remap.tsv + *_obs_mapped.tsv.gz)\n")
-    wf.write("Add column 'harmonized_cell_type_ontology_term_id', initialized from 'cell_type_ontology_term_id'; "
-             "overwritten from 'mapped_cell_label_ontology_term_id' for datasets with cell label harmonization output "
-             "(*_remap.tsv + *_obs_mapped.tsv.gz)\n")
+    wf.write("Add column 'harmonized_cell_label': from remap file, ucsc harmonized_cell_label, or CellxGene cell_type (see below)\n")
+    wf.write("Add column 'harmonized_cell_label_ontology_term_id': CL term ID paired with harmonized_cell_label\n")
+    wf.write("Add column 'harmonized_cell_label_source': 'ucsc' (remap or harmonized_cell_label) or 'cell_type' (CellxGene fallback)\n")
     wf.write(f"\nDatasets processed: {len(dataset_list)}\n")
     if harmonized_datasets:
-        wf.write(f"\nCell label harmonization applied ({len(harmonized_datasets)} datasets):\n")
+        wf.write(f"\nUCSC remap harmonization applied ({len(harmonized_datasets)} datasets):\n")
         for real_ds_id, ds_id, mapped_fp, doc_fp in harmonized_datasets:
             doi, title = _dataset_info(ds_id, ucsc_datasets, cxgInfo, ucscInfo)
             wf.write(f"\n  {real_ds_id}  '{title}'  {doi}\n")
@@ -305,8 +342,18 @@ with open(wrangling_notes_path, "w") as wf:
                     for line in doc_f:
                         wf.write("    " + line)
                 wf.write("\n")
+    if ucsc_harmonized_datasets:
+        wf.write(f"\nUCSC harmonized_cell_label used ({len(ucsc_harmonized_datasets)} datasets):\n")
+        for real_ds_id, ds_id, doc_fp in ucsc_harmonized_datasets:
+            doi, title = _dataset_info(ds_id, ucsc_datasets, cxgInfo, ucscInfo)
+            wf.write(f"\n  {real_ds_id}  '{title}'  {doi}\n")
+            if os.path.exists(doc_fp):
+                with open(doc_fp) as doc_f:
+                    for line in doc_f:
+                        wf.write("    " + line)
+                wf.write("\n")
     if fallback_datasets:
-        wf.write(f"\nCell label harmonization not available — fallback to cell_type ({len(fallback_datasets)} datasets):\n")
+        wf.write(f"\nFallback to CellxGene cell_type ({len(fallback_datasets)} datasets):\n")
         for real_ds_id, ds_id in fallback_datasets:
             doi, title = _dataset_info(ds_id, ucsc_datasets, cxgInfo, ucscInfo)
             wf.write(f"  {real_ds_id}  '{title}'  {doi}\n")
