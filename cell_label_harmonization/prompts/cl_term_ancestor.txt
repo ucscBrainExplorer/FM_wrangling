@@ -1,0 +1,13 @@
+The cell type label "{name}" could not be matched to a specific CL term. Find the closest ancestor (parent) CL term from this list that is biologically valid, even if less specific. You may ignore maturity qualifiers (e.g. 'immature', 'newborn'), sub-region qualifiers, or origin qualifiers to find the best match. For example, 'immature intratelencephalic excitatory neuron' → 'intratelencephalic-projecting glutamatergic cortical neuron'.
+
+{candidates}
+
+{context_line}Rules:
+- Choose the most specific term that is still biologically correct.
+- Do NOT add specificity absent from the label. If the label does not name a specific brain region (e.g. 'primary motor cortex', 'striatum', 'medulla', 'L5') or a specific organ (e.g. 'kidney', 'liver', 'lung', 'heart'), do NOT choose a term restricted to that region or organ.
+- Do NOT choose 'cell' or 'neuron' alone — these are too generic.
+- Do NOT choose a mature cell type for a label that indicates a progenitor, precursor, or intermediate progenitor cell (IPC). A progenitor label must map to a progenitor or stem cell CL term, not its downstream progeny.
+- ALWAYS prefer species-agnostic terms over species-specific ones. If a term ending in '(Homo sapiens)', '(Mus musculus)', or any other species name is in the list, check whether a species-agnostic parent term also exists in the list and use that instead. Only use a species-specific term if no species-agnostic equivalent is present in the candidate list.
+- HARD RULE: If the label refers to a tissue region, anatomical structure, or developmental zone (e.g. 'Cortical Hem', 'Ventricular Zone', 'Ganglionic Eminence') rather than a specific cell identity, reply NONE — anatomical structures are not cell types.
+- If no reasonable ancestor exists, reply NONE.
+Reply with ONLY the CL term ID (e.g. CL:0000540) or NONE, nothing else.

@@ -1,0 +1,16 @@
+Given the cell type name "{name}", which Cell Ontology (CL) term is the best match from this list?
+
+{candidates}
+
+{context_line}Rules:
+- HARD RULE: If the label contains a marker gene (e.g. VIP, SST, PV, SNCG, LAMP5, PVALB, CCK, NPY, CR, CB, CALB1, CALB2, RELN, TH, CHAT, GAD1, GAD2), you MUST choose the term that includes that marker gene name. Do NOT choose a broader lineage or origin term (e.g. 'caudal ganglionic eminence derived interneuron') when a marker-specific term (e.g. 'VIP GABAergic interneuron', 'sst GABAergic interneuron') is available in the candidate list. The marker gene takes priority over lineage origin.
+- HARD RULE: If the label or description contains a distinctive biological word (e.g. 'tripotential', 'corticothalamic', 'intratelencephalic') that appears verbatim in a candidate term's name, strongly prefer that term over a generic alternative (e.g. 'neural progenitor cell', 'neuron').
+- Prefer the most specific term that captures ALL meaningful parts of the label (e.g. cell class, brain region, maturity state, origin).
+- Do NOT choose a generic term (e.g. 'neuron', 'immature neuron') if the label encodes additional specificity that the generic term ignores.
+- Do NOT choose a term that adds specificity absent from the label. For example, if the label says 'IT neuron' without mentioning a layer, do NOT pick 'L2/3 IT neuron' or 'L5 IT neuron' — reply NONE instead and let the ancestor fallback find the right parent term.
+- Do NOT choose a term restricted to a specific organ or tissue (e.g. 'pancreas', 'liver', 'kidney', 'heart', 'lung', 'blood', 'retina') unless that organ is explicitly named in the label or context.
+- Only select a term if you are confident it is biologically correct.
+- Novel or recently described cell types may not have a CL term — reply NONE.
+- If no term captures the full specificity of the label, reply NONE.
+- HARD RULE: If the label refers to a tissue region, anatomical structure, or developmental zone (e.g. 'Cortical Hem', 'Ventricular Zone', 'Ganglionic Eminence') rather than a specific cell identity, reply NONE — anatomical structures are not cell types.
+Reply with ONLY the CL term ID (e.g. CL:0000540) or NONE, nothing else.
