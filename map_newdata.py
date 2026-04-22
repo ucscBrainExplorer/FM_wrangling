@@ -1,6 +1,24 @@
 import sys
+import argparse
+
+parser = argparse.ArgumentParser()
+input_group = parser.add_mutually_exclusive_group(required=True)
+input_group.add_argument("--npy", help="UCE embeddings .npy file")
+input_group.add_argument("--h5", help="UCE embeddings HDF5 file (dataset key: 'data')")
+input_group.add_argument("--h5ad", help="UCE adata .h5ad file")
+parser.add_argument("--obs", help="obs.tsv or obs.tsv.gz file (required when using --npy or --h5)")
+parser.add_argument("--config", required=True, metavar="JSON", help="transform config, e.g. Wang2025Nature/transform_e100.json")
+parser.add_argument("--out", default="newdata.arrow", help="output Arrow IPC file (default: newdata.arrow)")
+parser.add_argument("--title", help="title stored in Arrow schema metadata")
+parser.add_argument("--pin-first", metavar="COL", nargs="+", help="columns to place first in Arrow metadata, in order (e.g. --pin-first sample_label harmonized_cell_label)")
+args = parser.parse_args()
+
+if (args.npy or args.h5) and not args.obs:
+    parser.error("--obs is required when using --npy or --h5")
+
 import json
 import joblib
+import h5py
 import torch
 import numpy as np
 import pandas as pd
@@ -12,12 +30,8 @@ sys.path.insert(0, "/mnt/efsUCE/umap_pytorch")  #git+https://github.com/ucscBrai
 import umap_pytorch
 print(umap_pytorch.__file__)
 
-uce_adata_file = "tmpdata/e4ddac12-f48f-4455-8e8d-c2a48a683437-logNorm1M_uce_adata.h5ad"
-config_path = "Wang2025Nature/transform_e100.json"
-arrow_file = "newdata.arrow"
-
 # Read JSON file
-with open(config_path, "r") as f:
+with open(args.config, "r") as f:
     config = json.load(f)
 
 # Access fields
@@ -30,9 +44,17 @@ ipca = joblib.load(pca_model_file)
 pumap = umap_pytorch.load_pumap(pumap_model_file)
 
 # read uce result back
-adata = anndata.read_h5ad(uce_adata_file, backed='r') # use backed mode to skip loading .X gene expression matrix, save time and memory
-uce = adata.obsm["X_uce"]
-obs = adata.obs
+if args.npy:
+    uce = np.load(args.npy)
+    obs = pd.read_csv(args.obs, sep="\t", index_col=0)
+elif args.h5:
+    with h5py.File(args.h5, "r") as f:
+        uce = f["data"][:]
+    obs = pd.read_csv(args.obs, sep="\t", index_col=0)
+else:
+    adata = anndata.read_h5ad(args.h5ad, backed='r')
+    uce = adata.obsm["X_uce"]
+    obs = adata.obs
 
 # transform
 X_pca = ipca.transform(uce)
@@ -55,15 +77,26 @@ for col in obs.columns:
         if 1 < n_unique <= 100:
             cat_cols[col] = pa.array(obs[col].astype("category"))
 
+# Pin requested columns first, in order
+if args.pin_first:
+    pinned = {}
+    for col in args.pin_first:
+        if col not in cat_cols:
+            print(f"WARNING: --pin-first column '{col}' not found in detected columns — ignoring")
+        else:
+            pinned[col] = cat_cols[col]
+    rest = {k: v for k, v in cat_cols.items() if k not in pinned}
+    cat_cols = {**pinned, **rest}
+
 # Convert to Arrow Table
-table = pa.table({
-    "x": X_swapped[:, 0],
-    "y": X_swapped[:, 1],
-    **cat_cols
-    })
+metadata = {"title": args.title} if args.title else {}
+table = pa.table(
+    {"x": X_swapped[:, 0], "y": X_swapped[:, 1], **cat_cols},
+    metadata=metadata
+)
 
 # Save arrow file
-with pa.OSFile(arrow_file, "wb") as sink:
+with pa.OSFile(args.out, "wb") as sink:
     with ipc.new_file(sink, table.schema) as writer:
         writer.write_table(table)
-print("Saving to", arrow_file)
+print("Saving to", args.out)

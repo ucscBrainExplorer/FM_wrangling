@@ -43,7 +43,7 @@ obs = pd.read_csv(obs_path, sep='\t', low_memory=False)
 
 # Columns to always skip — IDs, QC numerics, ontology term IDs
 SKIP_COLS = {
-    "Unnamed: 0", "old_index", "barcodes", "library_id", "sample_id",
+    "Unnamed: 0", "old_index", "barcodes", "sample_id",
     "is_primary_data", "sizeFactor", "scDblFinder_score",
     "prob_compromised", "sum", "detected", "filtered_cell_count",
     "processed_cells", "submitter_id", "cluster",
