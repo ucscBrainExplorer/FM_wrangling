@@ -59,9 +59,11 @@ SKIP_COLS = {
     "n_genes",
 }
 
-# High-priority columns — always ranked first (user-specified)
+# High-priority columns — always included regardless of cardinality, null rate, or uniqueness
 HIGH_PRIORITY = {
     "harmonized_cell_label",
+    "sample_label",
+    "author_label",
     "disease",
     "suspension_type",
     "assay",
@@ -78,7 +80,10 @@ def score_column(col, series):
     n_unique = series.nunique()
 
     # High priority columns always included — skip all rejection checks
-    if col in HIGH_PRIORITY:
+    # sample_label gets 110 so it sorts immediately after the pinned harmonized_cell_label
+    if col == "sample_label":
+        base = 110
+    elif col in HIGH_PRIORITY:
         base = 100
     else:
         if null_rate > 0.5:
@@ -87,7 +92,9 @@ def score_column(col, series):
             return None, f"only {n_unique} unique value"
         if n_unique > 200:
             return None, f"too many categories ({n_unique})"
-        if series.dtype in [np.float64, np.float32, np.int64, np.int32] and n_unique > 50:
+        if series.dtype in [np.float64, np.float32] and n_unique > 50:
+            return None, "float/continuous — bin before including"
+        if series.dtype in [np.int64, np.int32, np.float64, np.float32] and n_unique > 50:
             return None, "numeric/continuous"
 
         # Infer importance from column name keywords

@@ -67,22 +67,33 @@ X_umap_pytorch.shape
 
 X_swapped = X_umap_pytorch @ swap_xy_matrix
 
+pin_set = set(args.pin_first) if args.pin_first else set()
+
 # Auto-detect categorical columns: exclude those with 1 or >100 unique values
+# pin-first columns are always included regardless of cardinality
 cat_cols = {}
 for col in obs.columns:
     if hasattr(obs[col], 'dtype') and (
         str(obs[col].dtype) == 'category' or obs[col].dtype == object
+        or np.issubdtype(obs[col].dtype, np.number)
     ):
         n_unique = obs[col].nunique()
-        if 1 < n_unique <= 100:
-            cat_cols[col] = pa.array(obs[col].astype("category"))
+        if col in pin_set or 1 < n_unique <= 100:
+            # Convert to string so viewer can render all values (handles bool, float, NaN→"nan")
+            str_series = obs[col].astype(str)
+            if np.issubdtype(obs[col].dtype, np.number):
+                # Sort categories numerically so viewer preserves numeric order
+                ordered_cats = [str(v) for v in sorted(obs[col].dropna().unique())]
+                cat_cols[col] = pa.array(pd.Categorical(str_series, categories=ordered_cats, ordered=True))
+            else:
+                cat_cols[col] = pa.array(str_series.astype("category"))
 
 # Pin requested columns first, in order
 if args.pin_first:
     pinned = {}
     for col in args.pin_first:
         if col not in cat_cols:
-            print(f"WARNING: --pin-first column '{col}' not found in detected columns — ignoring")
+            print(f"WARNING: --pin-first column '{col}' not found in obs — ignoring")
         else:
             pinned[col] = cat_cols[col]
     rest = {k: v for k, v in cat_cols.items() if k not in pinned}
