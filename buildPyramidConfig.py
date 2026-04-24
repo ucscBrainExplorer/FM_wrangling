@@ -44,9 +44,9 @@ obs = pd.read_csv(obs_path, sep='\t', low_memory=False)
 # Columns to always skip — IDs, QC numerics, ontology term IDs
 SKIP_COLS = {
     "Unnamed: 0", "old_index", "barcodes", "sample_id",
-    "is_primary_data", "sizeFactor", "scDblFinder_score",
+    "is_primary_data", "sizeFactor",
     "prob_compromised", "sum", "detected", "filtered_cell_count",
-    "processed_cells", "submitter_id", "cluster",
+    "processed_cells", "submitter_id",
     "disease_ontology_term_id", "tissue_ontology_term_id",
     "assay_ontology_term_id", "organism_ontology_term_id",
     "organism_ontology_id", "sex_ontology_term_id",
@@ -55,7 +55,7 @@ SKIP_COLS = {
     "harmonized_cell_label_ontology_term_id",
     "singler_celltype_ontology", "scimilarity_celltype_ontology",
     "consensus_celltype_ontology", "collection_doi",
-    "scimilarity_min_distance", "consensus_celltype_annotation",
+    "consensus_celltype_annotation",
     "n_genes",
 }
 
