@@ -73,72 +73,65 @@ HIGH_PRIORITY = {
 }
 
 def score_column(col, series):
-    """Score a column for viz usefulness. Higher = better."""
+    """Score a column for viz usefulness. Returns (score, info, feature_type) or (None, reason, None)."""
     n_total = len(series)
     n_null = series.isnull().sum()
     null_rate = n_null / n_total
     n_unique = series.nunique()
 
-    # High priority columns always included — skip all rejection checks
+    # High priority columns always included — skip null-rate and cardinality checks
     # sample_label gets 110 so it sorts immediately after the pinned harmonized_cell_label
     if col == "sample_label":
-        base = 110
+        return 110, f"{n_unique} unique, {null_rate:.0%} null", "category"
     elif col in HIGH_PRIORITY:
-        base = 100
-    else:
-        if null_rate > 0.5:
-            return None, f"{null_rate:.0%} null"
-        if n_unique <= 1:
-            return None, f"only {n_unique} unique value"
-        if n_unique > 200:
-            return None, f"too many categories ({n_unique})"
-        if series.dtype in [np.float64, np.float32] and n_unique > 50:
-            return None, "float/continuous — bin before including"
-        if series.dtype in [np.int64, np.int32, np.float64, np.float32] and n_unique > 50:
-            return None, "numeric/continuous"
+        return 100, f"{n_unique} unique, {null_rate:.0%} null", "category"
 
-        # Infer importance from column name keywords
-        col_lower = col.lower()
-        keyword_score = 0
-        # Biology signal keywords
-        if any(k in col_lower for k in ["cell_type", "celltype", "cell_label", "cell_category"]):
-            keyword_score += 40
-        elif any(k in col_lower for k in ["harmonized", "annotation"]):
-            keyword_score += 30
-        elif any(k in col_lower for k in ["disease", "diagnosis", "tumor", "cancer", "cnv"]):
-            keyword_score += 28
-        elif any(k in col_lower for k in ["tissue", "region", "location"]):
-            keyword_score += 25
-        elif any(k in col_lower for k in ["sex", "age", "stage", "ethnicity", "race"]):
-            keyword_score += 20
-        elif any(k in col_lower for k in ["mutation", "subtype", "subdiagnosis", "group"]):
-            keyword_score += 18
-        elif any(k in col_lower for k in ["status", "event", "survival", "os_", "efs_"]):
-            keyword_score += 15
-        elif any(k in col_lower for k in ["source", "type", "class", "category"]):
-            keyword_score += 12
-        # QC-like keywords score lower
-        elif any(k in col_lower for k in ["pass", "filter", "score", "percent", "mito", "doublet"]):
-            keyword_score += 5
+    if null_rate > 0.5:
+        return None, f"{null_rate:.0%} null", None
+    if n_unique <= 1:
+        return None, f"only {n_unique} unique value", None
 
-        # Data-driven score: cardinality + coverage + entropy
-        value_counts = series.dropna().value_counts(normalize=True)
-        entropy = -(value_counts * np.log2(value_counts + 1e-10)).sum()
-        max_entropy = np.log2(n_unique) if n_unique > 1 else 1
-        entropy_score = (entropy / max_entropy) * 20  # 0-20
+    is_numeric = np.issubdtype(series.dtype, np.number)
+    feature_type = "continuous" if (is_numeric and n_unique > 20) else "category"
 
-        if 2 <= n_unique <= 30:
-            cardinality_score = 20
-        elif n_unique <= 50:
-            cardinality_score = 10
-        else:
-            cardinality_score = 0
+    is_cell_label = any(k in col.lower() for k in ["cell_label", "cell_type", "celltype", "annotation", "author_label"])
+    if not is_numeric and not is_cell_label and n_unique > 100:
+        return None, f"too many categories ({n_unique})", None
 
-        coverage_score = (1 - null_rate) * 10  # 0-10
+    # Infer importance from column name keywords
+    col_lower = col.lower()
+    keyword_score = 0
+    if any(k in col_lower for k in ["cell_type", "celltype", "cell_label", "cell_category"]):
+        keyword_score += 40
+    elif any(k in col_lower for k in ["harmonized", "annotation"]):
+        keyword_score += 30
+    elif any(k in col_lower for k in ["disease", "diagnosis", "tumor", "cancer", "cnv"]):
+        keyword_score += 28
+    elif any(k in col_lower for k in ["tissue", "region", "location"]):
+        keyword_score += 25
+    elif any(k in col_lower for k in ["sex", "age", "stage", "ethnicity", "race"]):
+        keyword_score += 20
+    elif any(k in col_lower for k in ["mutation", "subtype", "subdiagnosis", "group"]):
+        keyword_score += 18
+    elif any(k in col_lower for k in ["status", "event", "survival", "os_", "efs_"]):
+        keyword_score += 15
+    elif any(k in col_lower for k in ["source", "type", "class", "category"]):
+        keyword_score += 12
+    elif any(k in col_lower for k in ["pass", "filter", "score", "percent", "mito", "doublet"]):
+        keyword_score += 5
 
-        base = keyword_score + entropy_score + cardinality_score + coverage_score
+    # Data-driven score: cardinality + coverage + entropy
+    value_counts = series.dropna().value_counts(normalize=True)
+    entropy = -(value_counts * np.log2(value_counts + 1e-10)).sum()
+    max_entropy = np.log2(n_unique) if n_unique > 1 else 1
+    entropy_score = (entropy / max_entropy) * 20  # 0-20
 
-    return base, f"{n_unique} categories, {null_rate:.0%} null"
+    cardinality_score = 20 if n_unique <= 20 else 0
+    coverage_score = (1 - null_rate) * 10  # 0-10
+
+    base = keyword_score + entropy_score + cardinality_score + coverage_score
+
+    return base, f"{n_unique} unique, {null_rate:.0%} null", feature_type
 
 # Determine the top cell label column to pin first
 CELL_LABEL_CANDIDATES = [
@@ -153,9 +146,9 @@ rejected = []
 for col in obs.columns:
     if col in SKIP_COLS or col == pinned:
         continue
-    score, info = score_column(col, obs[col])
+    score, info, feature_type = score_column(col, obs[col])
     if score is not None:
-        scored.append((col, score, info))
+        scored.append((col, score, info, feature_type))
     else:
         rejected.append((col, info))
 
@@ -167,21 +160,19 @@ top_n_rest = None if args.top_n is None else (args.top_n - 1 if pinned else args
 selected = []
 if pinned:
     selected.append(pinned)
-selected += [col for col, _, _ in scored[:top_n_rest]]
-remaining = scored[args.top_n:]
+selected += [col for col, _, _, _ in scored[:top_n_rest]]
 
-n_label = "all" if args.top_n is None else str(args.top_n)
-print(f"\nSelected {len(selected)} features (score | info):")
+print(f"\nSelected {len(selected)} features (score | type | info):")
 if pinned:
-    print(f"  pinned  {pinned}  ({obs[pinned].nunique()} categories, {obs[pinned].isnull().mean():.0%} null)")
-for col, score, info in scored[:top_n_rest]:
-    print(f"  {score:6.1f}  {col}  ({info})")
+    print(f"  pinned  {pinned}  ({obs[pinned].nunique()} unique, {obs[pinned].isnull().mean():.0%} null)  [category]")
+for col, score, info, feature_type in scored[:top_n_rest]:
+    print(f"  {score:6.1f}  {col}  ({info})  [{feature_type}]")
 
 remaining = [] if top_n_rest is None else scored[top_n_rest:]
 if remaining:
     print(f"\nNot included (edit JSON to add):")
-    for col, score, info in remaining:
-        print(f"  {score:6.1f}  {col}  ({info})")
+    for col, score, info, feature_type in remaining:
+        print(f"  {score:6.1f}  {col}  ({info})  [{feature_type}]")
 
 if rejected:
     print(f"\nRejected {len(rejected)} columns:")
@@ -189,6 +180,10 @@ if rejected:
         print(f"  {col}: {reason}")
 
 feature_labels = list(selected)  # copy — edit manually in output JSON
+type_map = {col: ft for col, _, _, ft in scored}
+if pinned:
+    type_map[pinned] = "category"
+feature_types = [type_map.get(col, "category") for col in selected]
 
 # Determine output path first so we can check for existing config
 if args.out:
@@ -213,6 +208,8 @@ config = {
     "umap_file": args.umap_file,
     "metadata_file": args.metadata_file,
     "features": selected,
+    "feature_types": feature_types,
+    "n_bins": 10,
     "start_chns": list(range(len(selected))),
     "feature_labels": list(selected),
 }
