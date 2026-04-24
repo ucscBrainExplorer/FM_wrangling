@@ -1,8 +1,8 @@
 """
 buildPyramidConfig.py — generate a pyramid config JSON from obs.tsv.gz
 
-Columns are ranked automatically by biological relevance, cardinality, and null rate.
-The top --top_n columns are selected; remainder printed for review.
+Columns are ordered: pinned cell label, HIGH_PRIORITY features, then
+all remaining eligible columns alphabetically.
 
 Usage:
     python3 FM_wrangling/buildPyramidConfig.py \
@@ -34,7 +34,7 @@ parser.add_argument("--metadata_file", default="obs.tsv.gz",
 parser.add_argument("--out", default=None,
                     help="Output JSON path (default: <results_dir>/pyramid_e{N}_config.json)")
 parser.add_argument("--top_n", type=int, default=None,
-                    help="Number of top-ranked features to include (default: all eligible columns)")
+                    help="Number of top features to include (default: all eligible columns)")
 args = parser.parse_args()
 
 obs_path = os.path.join(args.results_dir, args.metadata_file)
@@ -59,7 +59,8 @@ SKIP_COLS = {
     "n_genes",
 }
 
-# High-priority columns — always included regardless of cardinality, null rate, or uniqueness
+# High-priority columns — always included, listed before alphabetical remainder
+# sample_label is ordered first within this group (after the pinned cell label)
 HIGH_PRIORITY = {
     "harmonized_cell_label",
     "sample_label",
@@ -69,69 +70,31 @@ HIGH_PRIORITY = {
     "assay",
     "development_stage",
     "tissue",
-    "collection_doi_label",   # publication
+    "collection_doi_label",
 }
 
-def score_column(col, series):
-    """Score a column for viz usefulness. Returns (score, info, feature_type) or (None, reason, None)."""
+def classify_column(col, series):
+    """Returns (feature_type, reject_reason) — reject_reason is None if eligible."""
     n_total = len(series)
-    n_null = series.isnull().sum()
-    null_rate = n_null / n_total
+    null_rate = series.isnull().sum() / n_total
     n_unique = series.nunique()
-
-    # High priority columns always included — skip null-rate and cardinality checks
-    # sample_label gets 110 so it sorts immediately after the pinned harmonized_cell_label
-    if col == "sample_label":
-        return 110, f"{n_unique} unique, {null_rate:.0%} null", "category"
-    elif col in HIGH_PRIORITY:
-        return 100, f"{n_unique} unique, {null_rate:.0%} null", "category"
-
-    if null_rate > 0.5:
-        return None, f"{null_rate:.0%} null", None
-    if n_unique <= 1:
-        return None, f"only {n_unique} unique value", None
-
     is_numeric = np.issubdtype(series.dtype, np.number)
     feature_type = "continuous" if (is_numeric and n_unique > 20) else "category"
 
-    is_cell_label = any(k in col.lower() for k in ["cell_label", "cell_type", "celltype", "annotation", "author_label"])
+    if col in HIGH_PRIORITY:
+        return feature_type, None
+
+    if null_rate > 0.5:
+        return None, f"{null_rate:.0%} null"
+    if n_unique <= 1:
+        return None, f"only {n_unique} unique value"
+
+    is_cell_label = any(k in col.lower() for k in
+                        ["cell_label", "cell_type", "celltype", "annotation", "author_label"])
     if not is_numeric and not is_cell_label and n_unique > 100:
-        return None, f"too many categories ({n_unique})", None
+        return None, f"too many categories ({n_unique})"
 
-    # Infer importance from column name keywords
-    col_lower = col.lower()
-    keyword_score = 0
-    if any(k in col_lower for k in ["cell_type", "celltype", "cell_label", "cell_category"]):
-        keyword_score += 40
-    elif any(k in col_lower for k in ["harmonized", "annotation"]):
-        keyword_score += 30
-    elif any(k in col_lower for k in ["disease", "diagnosis", "tumor", "cancer", "cnv"]):
-        keyword_score += 28
-    elif any(k in col_lower for k in ["tissue", "region", "location"]):
-        keyword_score += 25
-    elif any(k in col_lower for k in ["sex", "age", "stage", "ethnicity", "race"]):
-        keyword_score += 20
-    elif any(k in col_lower for k in ["mutation", "subtype", "subdiagnosis", "group"]):
-        keyword_score += 18
-    elif any(k in col_lower for k in ["status", "event", "survival", "os_", "efs_"]):
-        keyword_score += 15
-    elif any(k in col_lower for k in ["source", "type", "class", "category"]):
-        keyword_score += 12
-    elif any(k in col_lower for k in ["pass", "filter", "score", "percent", "mito", "doublet"]):
-        keyword_score += 5
-
-    # Data-driven score: cardinality + coverage + entropy
-    value_counts = series.dropna().value_counts(normalize=True)
-    entropy = -(value_counts * np.log2(value_counts + 1e-10)).sum()
-    max_entropy = np.log2(n_unique) if n_unique > 1 else 1
-    entropy_score = (entropy / max_entropy) * 20  # 0-20
-
-    cardinality_score = 20 if n_unique <= 20 else 0
-    coverage_score = (1 - null_rate) * 10  # 0-10
-
-    base = keyword_score + entropy_score + cardinality_score + coverage_score
-
-    return base, f"{n_unique} unique, {null_rate:.0%} null", feature_type
+    return feature_type, None
 
 # Determine the top cell label column to pin first
 CELL_LABEL_CANDIDATES = [
@@ -140,52 +103,56 @@ CELL_LABEL_CANDIDATES = [
 ]
 pinned = next((c for c in CELL_LABEL_CANDIDATES if c in obs.columns), None)
 
-# Score all candidate columns
-scored = []
+# Classify all candidate columns
+eligible = {}   # col -> feature_type
 rejected = []
+
 for col in obs.columns:
     if col in SKIP_COLS or col == pinned:
         continue
-    score, info, feature_type = score_column(col, obs[col])
-    if score is not None:
-        scored.append((col, score, info, feature_type))
+    feature_type, reason = classify_column(col, obs[col])
+    if feature_type is not None:
+        eligible[col] = feature_type
     else:
-        rejected.append((col, info))
+        rejected.append((col, reason))
 
-# Sort by score descending
-scored.sort(key=lambda x: -x[1])
+# Build selection: pinned cell label → sample_label → other HIGH_PRIORITY (alpha) → rest (alpha)
+high_priority_cols = sorted(
+    [c for c in eligible if c in HIGH_PRIORITY and c != "sample_label"]
+)
+rest_cols = sorted([c for c in eligible if c not in HIGH_PRIORITY])
 
-# Pin cell label first, then remaining from scored (up to top_n if specified)
-top_n_rest = None if args.top_n is None else (args.top_n - 1 if pinned else args.top_n)
 selected = []
 if pinned:
     selected.append(pinned)
-selected += [col for col, _, _, _ in scored[:top_n_rest]]
+if "sample_label" in eligible:
+    selected.append("sample_label")
+selected += high_priority_cols + rest_cols
 
-print(f"\nSelected {len(selected)} features (score | type | info):")
-if pinned:
-    print(f"  pinned  {pinned}  ({obs[pinned].nunique()} unique, {obs[pinned].isnull().mean():.0%} null)  [category]")
-for col, score, info, feature_type in scored[:top_n_rest]:
-    print(f"  {score:6.1f}  {col}  ({info})  [{feature_type}]")
+# Apply top_n if specified
+if args.top_n is not None:
+    selected = selected[:args.top_n]
 
-remaining = [] if top_n_rest is None else scored[top_n_rest:]
-if remaining:
-    print(f"\nNot included (edit JSON to add):")
-    for col, score, info, feature_type in remaining:
-        print(f"  {score:6.1f}  {col}  ({info})  [{feature_type}]")
+# Print summary
+type_map = {pinned: "category"} if pinned else {}
+type_map.update(eligible)
+
+print(f"\nSelected {len(selected)} features:")
+for col in selected:
+    series = obs[col]
+    n_unique = series.nunique()
+    null_rate = series.isnull().mean()
+    marker = " [HIGH_PRIORITY]" if col in HIGH_PRIORITY or col == pinned else ""
+    print(f"  {col}  ({n_unique} unique, {null_rate:.0%} null)  [{type_map.get(col, 'category')}]{marker}")
 
 if rejected:
     print(f"\nRejected {len(rejected)} columns:")
     for col, reason in rejected:
         print(f"  {col}: {reason}")
 
-feature_labels = list(selected)  # copy — edit manually in output JSON
-type_map = {col: ft for col, _, _, ft in scored}
-if pinned:
-    type_map[pinned] = "category"
 feature_types = [type_map.get(col, "category") for col in selected]
 
-# Determine output path first so we can check for existing config
+# Determine output path
 if args.out:
     out_path = args.out
 else:
@@ -199,7 +166,7 @@ existing = {}
 if os.path.exists(out_path):
     with open(out_path) as f:
         existing = json.load(f)
-    print(f"\nFound existing config at {out_path} — reusing reference_name, reference_uuid, target_dir, start_chns")
+    print(f"\nFound existing config at {out_path} — reusing reference_name, reference_uuid, target_dir")
 
 config = {
     "reference_name": existing.get("reference_name", ""),
