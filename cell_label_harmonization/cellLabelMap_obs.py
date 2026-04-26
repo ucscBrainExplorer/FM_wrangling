@@ -3,21 +3,27 @@
 cellLabelMap_obs.py — annotate an obs TSV with remap results and hierarchy labels.
 
 The source column (join key) is read from the remap file header line
-"# Source column: <col>", written by generate_remap.py.
+"# Source column: <col>".
+
+The remap file requires four columns:
+  original_label
+  mapped_cell_label_ontology_term_id
+  mapped_cell_label_ontology_term_name
+  mapped_cell_label_ontology_term_match_method
+
+After joining, ontology columns are renamed to <source_col>_ontology_term_*.
 
 The hierarchy JSON (from detect_hierarchy.py) provides the two parent columns
 above the cell type column, added as level1_cell_label and level2_cell_label.
 
 Added columns
 -------------
-  mapped_cell_label                         level 3 (cell type, remap only)
-  mapped_cell_label_method                  (remap only)
-  mapped_cell_label_ontology_term_id        (remap only)
-  mapped_cell_label_ontology_term_name      (remap only)
-  mapped_cell_label_ontology_term_match_method  (remap only)
-  level3_cell_label                         copy of selected cell type col (always added)
-  level2_cell_label                         immediate parent of cell type col
-  level1_cell_label                         grandparent of cell type col
+  <source_col>_ontology_term_id           (remap only)
+  <source_col>_ontology_term_name         (remap only)
+  <source_col>_ontology_term_match_method (remap only)
+  level3_cell_label                       copy of selected cell type col (always added)
+  level2_cell_label                       immediate parent of cell type col
+  level1_cell_label                       grandparent of cell type col
 
 Output files (derived from --obs)
 ----------------------------------
@@ -29,10 +35,10 @@ Usage
   # Both (full annotation):
   python3 cellLabelMap_obs.py --obs obs.tsv.gz --remap map.tsv --hierarchy hierarchy.json
 
-  # Remap only (mapped_cell_label* columns, no level1/level2):
+  # Remap only (<source_col>_ontology_term_* columns, no level1/level2):
   python3 cellLabelMap_obs.py --obs obs.tsv.gz --remap map.tsv
 
-  # Hierarchy only (level1/level2 columns, no mapped_cell_label*):
+  # Hierarchy only (level1/level2 columns, no ontology terms):
   python3 cellLabelMap_obs.py --obs obs.tsv.gz --hierarchy hierarchy.json
 """
 
@@ -47,8 +53,6 @@ import pandas as pd
 
 REMAP_COLS = [
     "original_label",
-    "mapped_cell_label",
-    "mapped_cell_label_method",
     "mapped_cell_label_ontology_term_id",
     "mapped_cell_label_ontology_term_name",
     "mapped_cell_label_ontology_term_match_method",
@@ -94,15 +98,16 @@ def write_doc(doc_path, args, output_path, source_col, level2_col, level1_col,
     lines.append(f"  output:    {output_path}")
     lines.append("")
 
-    lines.append("Cell type hierarchy")
-    lines.append(f"  level1_cell_label  ← obs column '{level1_col}'" if level1_col
-                 else "  level1_cell_label  — not available")
-    lines.append(f"  level2_cell_label  ← obs column '{level2_col}'" if level2_col
-                 else "  level2_cell_label  — not available")
-    lines.append(f"  level3_cell_label  ← obs column '{source_col}'")
-    lines.append(f"  mapped_cell_label  ← remap of obs column '{source_col}'" if args.remap
-                 else f"  mapped_cell_label  — not available (no remap)")
-    lines.append("")
+    if args.hierarchy:
+        lines.append("Cell type hierarchy")
+        lines.append(f"  level1_cell_label  ← obs column '{level1_col}'" if level1_col
+                     else "  level1_cell_label  — not available")
+        lines.append(f"  level2_cell_label  ← obs column '{level2_col}'" if level2_col
+                     else "  level2_cell_label  — not available")
+        lines.append(f"  level3_cell_label  ← obs column '{source_col}'")
+        lines.append(f"  {source_col}_ontology_term_*  ← remap of obs column '{source_col}'" if args.remap
+                     else f"  {source_col}_ontology_term_*  — not available (no remap)")
+        lines.append("")
 
     if args.remap:
         lines.append("Mapping coverage")
@@ -118,67 +123,64 @@ def write_doc(doc_path, args, output_path, source_col, level2_col, level1_col,
             lines.append("")
 
         lines.append("Mapping method breakdown (unique labels)")
+        match_col = f"{source_col}_ontology_term_match_method"
         method_counts = (
-            obs[["mapped_cell_label_ontology_term_match_method", source_col]]
+            obs[[match_col, source_col]]
             .drop_duplicates(subset=source_col)
-            ["mapped_cell_label_ontology_term_match_method"]
+            [match_col]
             .value_counts()
         )
         for method, count in method_counts.items():
             lines.append(f"  {count:>4}  {method}")
         lines.append("")
 
-    lines.append("Level 1 categories")
-    if level1_col and "level1_cell_label" in obs.columns:
-        for val in sorted(obs["level1_cell_label"].dropna().unique()):
-            lines.append(f"  {val}")
-    else:
-        lines.append("  —")
-    lines.append("")
+    if args.hierarchy:
+        lines.append("Level 1 categories")
+        if level1_col and "level1_cell_label" in obs.columns:
+            for val in sorted(obs["level1_cell_label"].dropna().unique()):
+                lines.append(f"  {val}")
+        else:
+            lines.append("  —")
+        lines.append("")
 
-    lines.append("Level 2 categories")
-    if level2_col and "level2_cell_label" in obs.columns:
-        for val in sorted(obs["level2_cell_label"].dropna().unique()):
-            lines.append(f"  {val}")
-    else:
-        lines.append("  —")
-    lines.append("")
+        lines.append("Level 2 categories")
+        if level2_col and "level2_cell_label" in obs.columns:
+            for val in sorted(obs["level2_cell_label"].dropna().unique()):
+                lines.append(f"  {val}")
+        else:
+            lines.append("  —")
+        lines.append("")
 
-    lines.append("Level 3 categories")
-    if "level3_cell_label" in obs.columns:
-        for val in sorted(obs["level3_cell_label"].dropna().unique()):
-            lines.append(f"  {val}")
-    else:
-        lines.append("  —")
-    lines.append("")
+    if args.hierarchy:
+        lines.append("Level 3 categories")
+        if "level3_cell_label" in obs.columns:
+            for val in sorted(obs["level3_cell_label"].dropna().unique()):
+                lines.append(f"  {val}")
+        else:
+            lines.append("  —")
+        lines.append("")
 
     if args.remap:
-        lines.append("Level 3 categories (mapped_cell_label → ontology term)")
+        id_col   = f"{source_col}_ontology_term_id"
+        name_col = f"{source_col}_ontology_term_name"
+        meth_col = f"{source_col}_ontology_term_match_method"
+        lines.append(f"Remap ({source_col} → ontology term)")
+        lines.append(f"  {args.remap}")
+        lines.append("")
         label_map = (
-            obs[["mapped_cell_label", "mapped_cell_label_ontology_term_id"]]
+            obs[[source_col, id_col, name_col, meth_col]]
             .drop_duplicates()
-            .sort_values("mapped_cell_label")
+            .sort_values(source_col)
         )
         for _, row in label_map.iterrows():
-            term_id = row["mapped_cell_label_ontology_term_id"]
-            term_id = term_id if pd.notna(term_id) else "—"
-            lines.append(f"  {row['mapped_cell_label']:<50}  {term_id}")
+            term_id  = row[id_col]  if pd.notna(row[id_col])  else "—"
+            term_name = row[name_col] if pd.notna(row[name_col]) else ""
+            method   = row[meth_col] if pd.notna(row[meth_col]) else ""
+            lines.append(f"  {row[source_col]:<55}  {term_id:<12}  {term_name:<50}  {method}")
         lines.append("")
 
     with open(doc_path, "w") as f:
         f.write("\n".join(lines) + "\n")
-        if args.remap:
-            f.write("\n")
-            f.write("Remap file\n")
-            f.write(f"  {args.remap}\n\n")
-            with open(args.remap) as remap_f:
-                for line in remap_f:
-                    if line.startswith("# "):
-                        f.write(line[2:])
-                    elif line.startswith("#"):
-                        f.write(line[1:])
-                    else:
-                        f.write(line)
 
 
 def main():
@@ -237,14 +239,16 @@ def main():
             print(f"Error: remap file missing columns: {missing}", file=sys.stderr)
             sys.exit(1)
         remap = remap[REMAP_COLS].drop_duplicates(subset="original_label")
-        obs = obs.merge(
-            remap.rename(columns={"original_label": source_col}),
-            on=source_col,
-            how="left",
-        )
+        remap = remap.rename(columns={
+            "original_label": source_col,
+            "mapped_cell_label_ontology_term_id":           f"{source_col}_ontology_term_id",
+            "mapped_cell_label_ontology_term_name":         f"{source_col}_ontology_term_name",
+            "mapped_cell_label_ontology_term_match_method": f"{source_col}_ontology_term_match_method",
+        })
+        obs = obs.merge(remap, on=source_col, how="left")
 
     # --- add level1 / level2 / level3 from existing obs columns ---
-    if source_col in obs.columns:
+    if args.hierarchy and source_col in obs.columns:
         obs["level3_cell_label"] = obs[source_col]
 
     if level2_col:
@@ -262,10 +266,11 @@ def main():
     # --- coverage ---
     n_total = len(obs)
     if args.remap:
-        n_mapped = obs["mapped_cell_label_ontology_term_id"].notna().sum()
+        id_col = f"{source_col}_ontology_term_id"
+        n_mapped = obs[id_col].notna().sum()
         print(f"Coverage: {n_mapped:,} / {n_total:,} cells ({100 * n_mapped / n_total:.1f}%)")
         unmapped = (
-            obs.loc[obs["mapped_cell_label_ontology_term_id"].isna(), source_col]
+            obs.loc[obs[id_col].isna(), source_col]
             .value_counts()
         )
         if not unmapped.empty:

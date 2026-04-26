@@ -176,7 +176,9 @@ import argparse
 import os
 import re
 import sys
+import threading
 import warnings
+from concurrent.futures import ThreadPoolExecutor, as_completed
 warnings.filterwarnings("ignore", category=FutureWarning, module="google")
 warnings.filterwarnings("ignore", category=RuntimeWarning, module="networkx")
 
@@ -242,7 +244,7 @@ def fetch_doi_context(doi):
         return None
 
 
-def extract_pdf_text(pdf_path, max_pages=20):
+def extract_pdf_text(pdf_path, max_pages=20, start_page=0):
     """Extract plain text from a PDF, capped at max_pages to avoid supplements.
 
     Returns:
@@ -251,7 +253,7 @@ def extract_pdf_text(pdf_path, max_pages=20):
     try:
         import pypdf
         reader = pypdf.PdfReader(pdf_path)
-        pages = reader.pages[:max_pages]
+        pages = reader.pages[start_page:start_page + max_pages]
         text = '\n'.join(page.extract_text() or '' for page in pages)
         return text.strip() or None
     except Exception as e:
@@ -318,8 +320,8 @@ def build_parser():
                         help="Ground truth TSV file with annotation columns")
     parser.add_argument("--obo", type=str, required=True,
                         help="Cell Ontology OBO file")
-    parser.add_argument("--output", type=str, required=True,
-                        help="Output remap TSV path")
+    parser.add_argument("--output", type=str, default=None,
+                        help="Output remap TSV path (default: <input_stem>_remap.tsv alongside input)")
     parser.add_argument("--column", type=str, default=None,
                         help="Annotation column to use (auto-detect if omitted)")
     parser.add_argument("--min-score", type=float, default=0.10,
@@ -460,6 +462,12 @@ MARKER_GENES = {
     'cck':        'cck',
     'npy':        'npy',
 }
+
+_UNINFORMATIVE_LABELS = re.compile(
+    r'^(unknown|unassigned|unannotated|other|na|n/a|none|ambiguous|doublet|'
+    r'low quality|low_quality|noise|artifact|mixed|undefined)s?$',
+    re.IGNORECASE
+)
 
 
 def _apply_marker_filter(candidates, label, hint):
@@ -647,10 +655,12 @@ def _apply_voting(label, results, cl_names, resolved, method_prefix, G=None):
         print(" NONE")
 
 
-def _resolve_with_llm(unresolved_labels, cl_names, paper_context=None, label_hints=None, expansion=None, label_to_parent_subtree=None, G=None):
+def _resolve_with_llm(unresolved_labels, cl_names, paper_context=None, label_hints=None, expansion=None, label_to_parent_subtree=None, G=None, n_workers=10):
     """Attempt LLM resolution for a list of unresolved labels.
 
-    Tries Claude first (ANTHROPIC_API_KEY), then Gemini (GOOGLE_API_KEY).
+    Fires all label×API combinations in parallel (ThreadPoolExecutor), then
+    applies voting sequentially in original label order.  n_workers controls
+    concurrency — tune down if hitting API rate limits.
     Returns dict {label: (cl_id, cl_name, method)} for successfully resolved labels.
     """
     has_anthropic = bool(os.environ.get('ANTHROPIC_API_KEY'))
@@ -668,75 +678,121 @@ def _resolve_with_llm(unresolved_labels, cl_names, paper_context=None, label_hin
         apis.append('claude')
     if has_gemini:
         apis.append('gemini')
-    print(f"\n  LLM CL term resolution using: {', '.join(apis)}")
+    print(f"\n  LLM CL term resolution using: {', '.join(apis)} (n_workers={n_workers})")
 
-    resolved = {}
+    # Pre-compute candidates for all labels (CPU-bound, fast) before firing threads.
+    # Apply marker filter to full cl_names first so marker-specific terms are
+    # never crowded out of the top-100 candidate cut by unrelated high-scoring terms.
+    label_data = {}
     for label in unresolved_labels:
         hint = label_hints.get(label, label) if label_hints else label
         query = f"{label} {hint}" if hint != label else label
         parent_subtree = label_to_parent_subtree.get(label) if label_to_parent_subtree else None
-        # Apply marker filter to full cl_names first so marker-specific terms are
-        # never crowded out of the top-100 candidate cut by unrelated high-scoring terms.
         pool = _apply_marker_filter(cl_names, label, hint)
         candidates = _filter_candidate_terms(query, pool, expansion=expansion, parent_subtree=parent_subtree)
-        print(f"    \"{label}\" ({len(candidates)} candidate terms)...", end="", flush=True)
+        label_data[label] = (hint, candidates)
 
-        results = {}
-        for api in list(apis):
+    disabled_apis = set()
+    _lock = threading.Lock()
+
+    def _submit_calls(labels, query_fn):
+        """Fire all label×api combinations in parallel; return {label: {api: cl_id}}."""
+        raw = {lbl: {} for lbl in labels}
+        active = [a for a in apis if a not in disabled_apis]
+        tasks = [(lbl, a) for lbl in labels for a in active]
+        if not tasks:
+            return raw
+
+        def _call(lbl, api):
+            with _lock:
+                if api in disabled_apis:
+                    return lbl, api, None, None
+            _, candidates = label_data[lbl]
             try:
-                cl_id = query_llm_mapping(label, candidates, api=api,
-                                          paper_context=paper_context)
+                cl_id = query_fn(lbl, candidates, api=api, paper_context=paper_context)
+                return lbl, api, cl_id, None
             except FatalAPIError as e:
-                print(f"\n  {e} — disabling {api} for remaining labels")
-                apis.remove(api)
-                continue
+                return lbl, api, None, e
+
+        with ThreadPoolExecutor(max_workers=min(len(tasks), n_workers)) as ex:
+            futures = {ex.submit(_call, lbl, api): (lbl, api) for lbl, api in tasks}
+            for fut in as_completed(futures):
+                lbl, api, cl_id, err = fut.result()
+                if err:
+                    print(f"\n  {err} — disabling {api} for remaining labels")
+                    with _lock:
+                        disabled_apis.add(api)
+                elif cl_id is not None:
+                    raw[lbl][api] = cl_id
+        return raw
+
+    # Main mapping pass — fire all in parallel, vote sequentially in label order
+    raw = _submit_calls(unresolved_labels, query_llm_mapping)
+    resolved = {}
+    for label in unresolved_labels:
+        hint, candidates = label_data[label]
+        print(f"    \"{label}\" ({len(candidates)} candidate terms)...", end="", flush=True)
+        results = {}
+        for api, cl_id in raw[label].items():
             if cl_id == 'NONE':
                 print(f" [{api}: no match]", end="", flush=True)
-                continue  # explicit NONE — don't add to results
-            if cl_id and cl_id != 'CL:0000000':
+            elif cl_id and cl_id != 'CL:0000000':
                 results[api] = cl_id
-
         _apply_voting(label, results, cl_names, resolved, method_prefix='llm', G=G)
 
     # Ancestor fallback: for labels still unresolved, try closest parent CL term
     still_unresolved = [l for l in unresolved_labels if l not in resolved]
     if still_unresolved:
         print(f"\n  Ancestor fallback for {len(still_unresolved)} labels...")
+        raw_anc = _submit_calls(still_unresolved, query_llm_ancestor)
         for label in still_unresolved:
-            # Use plain English cell label as query for better candidate filtering
-            hint = label_hints.get(label, label) if label_hints else label
-            query = f"{label} {hint}" if hint != label else label
-            parent_subtree = label_to_parent_subtree.get(label) if label_to_parent_subtree else None
-            pool = _apply_marker_filter(cl_names, label, hint)
-            candidates = _filter_candidate_terms(query, pool, expansion=expansion, parent_subtree=parent_subtree)
+            hint, candidates = label_data[label]
             print(f"    \"{label}\" → \"{hint[:50]}\" ({len(candidates)} candidate terms)...", end="", flush=True)
-
             results = {}
-            claude_vetoed = False
-            for api in list(apis):
-                try:
-                    cl_id = query_llm_ancestor(label, candidates, api=api,
-                                               paper_context=paper_context)
-                except FatalAPIError as e:
-                    print(f"\n  {e} — disabling {api} for remaining labels")
-                    apis.remove(api)
-                    continue
+            claude_vetoed = raw_anc[label].get('claude') == 'NONE'
+            for api, cl_id in raw_anc[label].items():
                 if cl_id == 'NONE':
                     if api == 'claude':
-                        claude_vetoed = True
                         print(f" [claude: no ancestor]", end="", flush=True)
                     else:
                         print(f" [gemini: no ancestor]", end="", flush=True)
-                    continue
-                if cl_id:
+                elif cl_id:
                     if api == 'gemini' and claude_vetoed:
                         print(f" [claude vetoed gemini ancestor {cl_id} ({cl_names.get(cl_id, '?')})]", end="", flush=True)
-                        continue  # Claude vetoed — ignore gemini's answer
-                    results[api] = cl_id
-
+                    else:
+                        results[api] = cl_id
             _apply_voting(label, results, cl_names, resolved, method_prefix='llm_ancestor', G=G)
 
     return resolved
+
+
+def _parse_glossary(paper_context):
+    """Parse a glossary string into a {normalized_key: value} lookup dict."""
+    lookup = {}
+    if not paper_context:
+        return lookup
+    for line in paper_context.splitlines():
+        sep = ':' if ':' in line else ('=' if '=' in line else None)
+        if sep:
+            key, _, val = line.partition(sep)
+            key = key.strip().lower()
+            key = re.sub(r'[–—‒]', '-', key)
+            val = val.strip()
+            if key and val:
+                lookup[key] = val
+    return lookup
+
+
+def _glossary_covers(label, lookup):
+    """Return True if the label or any of its tokens appears as a glossary key."""
+    lbl_lower = label.lower().strip()
+    lbl_norm = re.sub(r'[–—‒]', '-', lbl_lower)
+    if (lookup.get(lbl_lower) or lookup.get(lbl_norm) or
+            lookup.get(lbl_lower + 's') or lookup.get(lbl_lower.rstrip('s'))):
+        return True
+    tokens = [t for t in re.split(r'[\s\-_/]+', lbl_norm) if len(t) >= 2]
+    return any(lookup.get(t) or lookup.get(t.rstrip('s')) or lookup.get(t + 's')
+               for t in tokens)
 
 
 def generate_remap(df, column, obo_path, paper_context=None, use_llm=True, cellxgene_fallback_labels=None):
@@ -769,12 +825,6 @@ def generate_remap(df, column, obo_path, paper_context=None, use_llm=True, cellx
             types = sorted(grp['cell_type'].dropna().astype(str).unique())
             ids = sorted(grp['cell_type_ontology_term_id'].dropna().astype(str).unique())
             cellxgene_lookup[label] = (' | '.join(types), ' | '.join(ids))
-
-    _UNINFORMATIVE_LABELS = re.compile(
-        r'^(unknown|unassigned|unannotated|other|na|n/a|none|ambiguous|doublet|'
-        r'low quality|low_quality|noise|artifact|mixed|undefined)s?$',
-        re.IGNORECASE
-    )
 
     # Parse glossary before the cascade so it can override synonym/fuzzy matches
     # for labels that appear in the paper context (e.g. IPC = Intermediate Progenitor Cell,
@@ -1397,25 +1447,36 @@ def main():
     # Fetch paper context — PDF takes priority over DOI
     paper_context = None
     if args.pdf:
-        print(f"\nExtracting cell type glossary from PDF: {args.pdf}...")
-        pdf_text = extract_pdf_text(args.pdf)
-        if pdf_text:
-            # Prefer Gemini for glossary extraction — large input, saves Claude TPM quota
-            llm_api = 'gemini' if os.environ.get('GOOGLE_API_KEY') else \
-                      'claude' if os.environ.get('ANTHROPIC_API_KEY') else None
-            if llm_api:
-                paper_context = extract_cell_type_glossary(pdf_text, api=llm_api)
-                if paper_context:
-                    lines = paper_context.splitlines()
-                    print(f"  Glossary extracted ({len(lines)} entries):")
-                    for entry in lines:
-                        print(f"    {entry}")
-                else:
-                    print("  Glossary extraction failed — proceeding without it.")
-            else:
-                print("  Skipping glossary extraction (no LLM API key).")
+        glossary_cache = re.sub(r'\.pdf$', '', args.pdf, flags=re.IGNORECASE) + '_glossary.txt'
+        if os.path.exists(glossary_cache):
+            with open(glossary_cache) as f:
+                paper_context = f.read().strip()
+            lines = paper_context.splitlines()
+            print(f"\nLoaded cached glossary from {glossary_cache} ({len(lines)} entries):")
+            for entry in lines:
+                print(f"    {entry}")
         else:
-            print("  Could not read PDF — proceeding without it.")
+            print(f"\nExtracting cell type glossary from PDF: {args.pdf}...")
+            pdf_text = extract_pdf_text(args.pdf)
+            if pdf_text:
+                # Prefer Gemini for glossary extraction — large input, saves Claude TPM quota
+                llm_api = 'gemini' if os.environ.get('GOOGLE_API_KEY') else \
+                          'claude' if os.environ.get('ANTHROPIC_API_KEY') else None
+                if llm_api:
+                    paper_context = extract_cell_type_glossary(pdf_text, api=llm_api)
+                    if paper_context:
+                        with open(glossary_cache, 'w') as f:
+                            f.write(paper_context)
+                        lines = paper_context.splitlines()
+                        print(f"  Glossary extracted ({len(lines)} entries) — cached to {glossary_cache}:")
+                        for entry in lines:
+                            print(f"    {entry}")
+                    else:
+                        print("  Glossary extraction failed — proceeding without it.")
+                else:
+                    print("  Skipping glossary extraction (no LLM API key).")
+            else:
+                print("  Could not read PDF — proceeding without it.")
     elif args.doi:
         print(f"\nFetching paper context for DOI: {args.doi}...")
         paper_context = fetch_doi_context(args.doi)
@@ -1457,6 +1518,62 @@ def main():
     hierarchy_str = build_hierarchy_string(df, parent_cols, selected_col, child_cols)
     print(f"\nDetected hierarchy: {hierarchy_str}")
 
+    # Glossary coverage check: if --pdf was given, read additional pages for any
+    # labels not covered by the initial extraction.
+    if args.pdf and paper_context:
+        _checkable = sorted({
+            str(v).strip() for v in df[selected_col]
+            if pd.notna(v) and str(v).strip()
+            and not _UNINFORMATIVE_LABELS.match(str(v).strip())
+            and not _is_cl_id(str(v).strip())
+        })
+        _lookup = _parse_glossary(paper_context)
+        uncovered = [l for l in _checkable if not _glossary_covers(l, _lookup)]
+
+        print(f"\nGlossary coverage: {len(_checkable) - len(uncovered)}/{len(_checkable)} "
+              f"labels from '{selected_col}' found.")
+        if uncovered:
+            print(f"  {len(uncovered)} uncovered label(s):")
+            for l in uncovered[:10]:
+                print(f"    - {l}")
+            if len(uncovered) > 10:
+                print(f"    ... and {len(uncovered) - 10} more")
+
+            try:
+                import pypdf
+                total_pages = len(pypdf.PdfReader(args.pdf).pages)
+            except Exception:
+                total_pages = 0
+
+            sup_api = 'gemini' if has_gemini else 'claude'
+            BATCH = 20
+            page = BATCH  # pages 0–BATCH-1 already processed
+            while uncovered and page < total_pages:
+                end = min(page + BATCH, total_pages)
+                print(f"\n  Reading PDF pages {page + 1}–{end} of {total_pages} "
+                      f"({len(uncovered)} label(s) still uncovered)...")
+                extra_text = extract_pdf_text(args.pdf, max_pages=BATCH, start_page=page)
+                if extra_text:
+                    supplemental = extract_cell_type_glossary(extra_text, api=sup_api)
+                    if supplemental:
+                        paper_context += '\n' + supplemental
+                        _lookup = _parse_glossary(paper_context)
+                        new_uncovered = [l for l in uncovered
+                                         if not _glossary_covers(l, _lookup)]
+                        found = len(uncovered) - len(new_uncovered)
+                        if found:
+                            print(f"    Resolved {found} label(s).")
+                        uncovered = new_uncovered
+                        with open(glossary_cache, 'w') as f:
+                            f.write(paper_context)
+                page += BATCH
+
+            if uncovered:
+                print(f"  {len(uncovered)} label(s) remain uncovered after full PDF "
+                      f"(will fall back to LLM).")
+            else:
+                print(f"  All labels now covered.")
+
     # Generate remap
     print(f"\nResolving labels from '{selected_col}' to CL term IDs...")
     remap_df, summary = generate_remap(df, selected_col, args.obo,
@@ -1464,6 +1581,13 @@ def main():
                                        use_llm=not args.no_llm,
                                        cellxgene_fallback_labels=args.cellxgene_fallback)
     print(summary)
+
+    # Derive output path if not specified
+    if args.output is None:
+        from pathlib import Path
+        stem = re.sub(r'\.tsv(\.gz)?$', '', Path(args.input).name)
+        args.output = str(Path(args.input).parent / f"{stem}_remap.tsv")
+        print(f"\nOutput: {args.output}")
 
     # Write output
     output_dir = os.path.dirname(args.output)

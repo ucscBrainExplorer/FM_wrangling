@@ -70,7 +70,9 @@ HIGH_PRIORITY = {
     "assay",
     "development_stage",
     "tissue",
+    "tissue_type",
     "collection_doi_label",
+    "publication",
 }
 
 def classify_column(col, series):
@@ -108,7 +110,7 @@ eligible = {}   # col -> feature_type
 rejected = []
 
 for col in obs.columns:
-    if col in SKIP_COLS or col == pinned:
+    if col in SKIP_COLS or col == pinned or col.endswith("_term_id"):
         continue
     feature_type, reason = classify_column(col, obs[col])
     if feature_type is not None:
