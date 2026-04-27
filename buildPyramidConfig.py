@@ -53,6 +53,7 @@ SKIP_COLS = {
     "development_stage_ontology_term_id",
     "self_reported_ethnicity_ontology_term_id",
     "harmonized_cell_label_ontology_term_id",
+    "harmonized_cell_label_ontology_term_match_method",
     "singler_celltype_ontology", "scimilarity_celltype_ontology",
     "consensus_celltype_ontology", "collection_doi",
     "consensus_celltype_annotation",

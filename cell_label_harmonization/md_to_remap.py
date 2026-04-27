@@ -23,9 +23,9 @@ Output columns (required by cellLabelMap_obs.py)
 
 Confidence → match method
 -------------------------
-  High   → reference_high
-  Medium → reference_medium
-  Low    → reference_low
+  High   → curated, high confidence
+  Medium → curated, medium confidence
+  Low    → curated, low confidence
 """
 
 import argparse
@@ -37,9 +37,9 @@ import pandas as pd
 
 
 CONF_TO_METHOD = {
-    "high":   "reference_high",
-    "medium": "reference_medium",
-    "low":    "reference_low",
+    "high":   "curated, high confidence",
+    "medium": "curated, medium confidence",
+    "low":    "curated, low confidence",
 }
 
 # Expected column positions in the reference table
@@ -91,7 +91,7 @@ def parse_md_table(md_path):
                 'mapped_cell_label_ontology_term_id':           cl_id,
                 'mapped_cell_label_ontology_term_name':         cl_term,
                 'mapped_cell_label_ontology_term_match_method': CONF_TO_METHOD.get(
-                    confidence.lower(), 'reference'),
+                    confidence.lower(), 'curated, unspecified confidence'),
             })
 
     return rows
