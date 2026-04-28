@@ -23,8 +23,10 @@ import pandas as pd
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
 parser = argparse.ArgumentParser()
-parser.add_argument("--results_dir", required=True)
-parser.add_argument("--pyramid_file", required=True)
+parser.add_argument("--results_dir", required=True,
+                    help="Directory containing the UMAP .npy and metadata TSV referenced by the pyramid config")
+parser.add_argument("--pyramid_file", required=True,
+                    help="Pyramid config JSON filename inside results_dir (e.g. pyramid_e30_config.json)")
 args = parser.parse_args()
 
 results_dir  = args.results_dir
@@ -82,7 +84,7 @@ def findCodes(data, feature):
     mask = ~pd.isna(categories)
     categories_int = np.zeros_like(categories, dtype=int)
     categories_int[mask] = le.fit_transform(categories[mask]) + 1
-    cat_list = ["background"] + [str(c) for c in le.classes_]
+    cat_list = ["background"] + [str(int(c)) if isinstance(c, float) and c.is_integer() else str(c) for c in le.classes_]
     print(f"  {len(le.classes_)} categories")
     return categories_int, cat_list
 

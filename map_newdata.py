@@ -1,4 +1,5 @@
 import sys
+import os
 import argparse
 import math
 
@@ -7,7 +8,7 @@ input_group = parser.add_mutually_exclusive_group(required=True)
 input_group.add_argument("--npy", help="UCE embeddings .npy file")
 input_group.add_argument("--h5", help="UCE embeddings HDF5 file (dataset key: 'data')")
 input_group.add_argument("--h5ad", help="UCE adata .h5ad file")
-parser.add_argument("--obs", help="obs.tsv or obs.tsv.gz file (required when using --npy or --h5)")
+parser.add_argument("--obs", metavar="FILE", help="obs TSV (required with --npy/--h5; optional override with --h5ad)")
 parser.add_argument("--config", required=True, metavar="JSON", help="transform config, e.g. Wang2025Nature/transform_e100.json")
 parser.add_argument("--out", default="newdata.arrow", help="output Arrow IPC file (default: newdata.arrow)")
 parser.add_argument("--title", help="title stored in Arrow schema metadata")
@@ -67,13 +68,15 @@ CELL_LABEL_CANDIDATES = [
     "cell_type_annotation", "author_cell_type",
 ]
 
+FORCE_CATEGORY = {"cluster"}
+
 def classify_column(col, series):
     """Returns (feature_type, reject_reason) — reject_reason is None if eligible."""
     n_total = len(series)
     null_rate = series.isnull().sum() / n_total
     n_unique = series.nunique()
     is_numeric = np.issubdtype(series.dtype, np.number)
-    feature_type = "continuous" if (is_numeric and n_unique > 20) else "category"
+    feature_type = "continuous" if (is_numeric and n_unique > 20 and col.lower() not in FORCE_CATEGORY) else "category"
 
     if col in HIGH_PRIORITY:
         return feature_type, None
@@ -135,8 +138,9 @@ def bin_series(series, n_bins=10):
 with open(args.config, "r") as f:
     config = json.load(f)
 
-pca_model_file = config["pca_model_file"]
-pumap_model_file = config["pumap_model_file"]
+config_dir = os.path.dirname(os.path.abspath(args.config))
+pca_model_file = os.path.join(config_dir, config["pca_model_file"])
+pumap_model_file = os.path.join(config_dir, config["pumap_model_file"])
 swap_xy_matrix = np.array(config["swap_xy_matrix"])
 
 ipca = joblib.load(pca_model_file)
@@ -152,7 +156,7 @@ elif args.h5:
 else:
     adata = anndata.read_h5ad(args.h5ad, backed='r')
     uce = adata.obsm["X_uce"]
-    obs = adata.obs
+    obs = pd.read_csv(args.obs, sep="\t", index_col=0) if args.obs else adata.obs
 
 # ── project onto reference UMAP ───────────────────────────────────────────────
 

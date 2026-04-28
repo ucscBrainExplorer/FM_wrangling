@@ -33,8 +33,6 @@ parser.add_argument("--metadata_file", default="obs.tsv.gz",
                     help="Obs metadata filename inside results_dir (default: obs.tsv.gz)")
 parser.add_argument("--out", default=None,
                     help="Output JSON path (default: <results_dir>/pyramid_e{N}_config.json)")
-parser.add_argument("--top_n", type=int, default=None,
-                    help="Number of top features to include (default: all eligible columns)")
 args = parser.parse_args()
 
 obs_path = os.path.join(args.results_dir, args.metadata_file)
@@ -76,13 +74,15 @@ HIGH_PRIORITY = {
     "publication",
 }
 
+FORCE_CATEGORY = {"cluster"}
+
 def classify_column(col, series):
     """Returns (feature_type, reject_reason) — reject_reason is None if eligible."""
     n_total = len(series)
     null_rate = series.isnull().sum() / n_total
     n_unique = series.nunique()
     is_numeric = np.issubdtype(series.dtype, np.number)
-    feature_type = "continuous" if (is_numeric and n_unique > 20) else "category"
+    feature_type = "continuous" if (is_numeric and n_unique > 20 and col.lower() not in FORCE_CATEGORY) else "category"
 
     if col in HIGH_PRIORITY:
         return feature_type, None
@@ -131,10 +131,6 @@ if pinned:
 if "sample_label" in eligible:
     selected.append("sample_label")
 selected += high_priority_cols + rest_cols
-
-# Apply top_n if specified
-if args.top_n is not None:
-    selected = selected[:args.top_n]
 
 # Print summary
 type_map = {pinned: "category"} if pinned else {}
