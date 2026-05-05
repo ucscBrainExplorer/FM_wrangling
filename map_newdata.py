@@ -142,6 +142,8 @@ config_dir = os.path.dirname(os.path.abspath(args.config))
 pca_model_file = os.path.join(config_dir, config["pca_model_file"])
 pumap_model_file = os.path.join(config_dir, config["pumap_model_file"])
 swap_xy_matrix = np.array(config["swap_xy_matrix"])
+d_hat_file = config.get("d_hat")
+W = np.load(os.path.join(config_dir, d_hat_file)).astype(np.float32) if d_hat_file else None
 
 ipca = joblib.load(pca_model_file)
 pumap = umap_pytorch.load_pumap(pumap_model_file)
@@ -161,6 +163,8 @@ else:
 # ── project onto reference UMAP ───────────────────────────────────────────────
 
 X_pca = ipca.transform(uce).astype(np.float32)
+if W is not None:
+    X_pca = X_pca - (X_pca @ W.T) @ W
 data_tensor = torch.from_numpy(X_pca)
 X_umap = pumap.transform(data_tensor)
 X_swapped = X_umap @ swap_xy_matrix
@@ -183,10 +187,10 @@ high_priority_cols = sorted([c for c in eligible if c in HIGH_PRIORITY and c != 
 rest_cols = sorted([c for c in eligible if c not in HIGH_PRIORITY])
 
 ordered_cols = []
-if pinned:
-    ordered_cols.append(pinned)
 if "sample_label" in eligible:
     ordered_cols.append("sample_label")
+if pinned:
+    ordered_cols.append(pinned)
 ordered_cols += high_priority_cols + rest_cols
 
 cat_cols = {}

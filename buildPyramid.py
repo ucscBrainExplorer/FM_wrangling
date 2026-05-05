@@ -276,6 +276,8 @@ with open(config_path) as f:
 
 reference_name = config["reference_name"]
 target_dir     = config["target_dir"]
+if not os.path.isabs(target_dir):
+    target_dir = os.path.join(results_dir, target_dir)
 umap_file      = config["umap_file"]
 metadata_file  = config["metadata_file"]
 

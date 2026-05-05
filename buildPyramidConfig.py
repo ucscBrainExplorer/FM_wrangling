@@ -61,8 +61,8 @@ SKIP_COLS = {
 # High-priority columns — always included, listed before alphabetical remainder
 # sample_label is ordered first within this group (after the pinned cell label)
 HIGH_PRIORITY = {
-    "harmonized_cell_label",
     "sample_label",
+    "harmonized_cell_label",
     "author_label",
     "disease",
     "suspension_type",
@@ -128,8 +128,6 @@ rest_cols = sorted([c for c in eligible if c not in HIGH_PRIORITY])
 selected = []
 if pinned:
     selected.append(pinned)
-if "sample_label" in eligible:
-    selected.append("sample_label")
 selected += high_priority_cols + rest_cols
 
 # Print summary
