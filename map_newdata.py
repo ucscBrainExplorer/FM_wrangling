@@ -51,17 +51,6 @@ SKIP_COLS = {
     "n_genes",
 }
 
-HIGH_PRIORITY = {
-    "harmonized_cell_label",
-    "sample_label",
-    "author_label",
-    "disease",
-    "suspension_type",
-    "assay",
-    "development_stage",
-    "tissue",
-    "collection_doi_label",
-}
 
 CELL_LABEL_CANDIDATES = [
     "harmonized_cell_label", "cell_type", "celltype", "cell_label",
@@ -75,11 +64,8 @@ def classify_column(col, series):
     n_total = len(series)
     null_rate = series.isnull().sum() / n_total
     n_unique = series.nunique()
-    is_numeric = np.issubdtype(series.dtype, np.number)
+    is_numeric = pd.api.types.is_numeric_dtype(series)
     feature_type = "continuous" if (is_numeric and n_unique > 20 and col.lower() not in FORCE_CATEGORY) else "category"
-
-    if col in HIGH_PRIORITY:
-        return feature_type, None
 
     if null_rate > 0.5:
         return None, f"{null_rate:.0%} null"
@@ -87,7 +73,7 @@ def classify_column(col, series):
         return None, f"only {n_unique} unique value"
 
     is_cell_label = any(k in col.lower() for k in
-                        ["cell_label", "cell_type", "celltype", "annotation", "author_label"])
+                        ["label", "celltype", "cell_type", "annotation", "harmoniz", "region"])
     if not is_numeric and not is_cell_label and n_unique > 100:
         return None, f"too many categories ({n_unique})"
 
@@ -183,15 +169,12 @@ for col in obs.columns:
     else:
         print(f"  skip {col}: {reason}")
 
-high_priority_cols = sorted([c for c in eligible if c in HIGH_PRIORITY and c != "sample_label"])
-rest_cols = sorted([c for c in eligible if c not in HIGH_PRIORITY])
-
 ordered_cols = []
 if "sample_label" in eligible:
     ordered_cols.append("sample_label")
 if pinned:
     ordered_cols.append(pinned)
-ordered_cols += high_priority_cols + rest_cols
+ordered_cols += sorted([c for c in eligible if c != "sample_label"])
 
 cat_cols = {}
 for col in ordered_cols:

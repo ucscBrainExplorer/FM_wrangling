@@ -33,6 +33,8 @@ parser.add_argument("--metadata_file", default="obs.tsv.gz",
                     help="Obs metadata filename inside results_dir (default: obs.tsv.gz)")
 parser.add_argument("--out", default=None,
                     help="Output JSON path (default: <results_dir>/pyramid_e{N}_config.json)")
+parser.add_argument("--pinned", default=None,
+                    help="Column to pin as the primary cell label (overrides CELL_LABEL_CANDIDATES)")
 args = parser.parse_args()
 
 obs_path = os.path.join(args.results_dir, args.metadata_file)
@@ -72,6 +74,7 @@ HIGH_PRIORITY = {
     "tissue_type",
     "collection_doi_label",
     "publication",
+    "normalized_organism",
 }
 
 FORCE_CATEGORY = {"cluster"}
@@ -101,10 +104,15 @@ def classify_column(col, series):
 
 # Determine the top cell label column to pin first
 CELL_LABEL_CANDIDATES = [
-    "harmonized_cell_label", "cell_type", "celltype", "cell_label",
+    "harmonized_cell_label", "custom_cell_type", "cell_type", "celltype", "cell_label",
     "cell_type_annotation", "author_cell_type",
 ]
-pinned = next((c for c in CELL_LABEL_CANDIDATES if c in obs.columns), None)
+if args.pinned:
+    if args.pinned not in obs.columns:
+        raise ValueError(f"--pinned column '{args.pinned}' not found in {obs_path}")
+    pinned = args.pinned
+else:
+    pinned = next((c for c in CELL_LABEL_CANDIDATES if c in obs.columns), None)
 
 # Classify all candidate columns
 eligible = {}   # col -> feature_type
@@ -129,6 +137,10 @@ selected = []
 if pinned:
     selected.append(pinned)
 selected += high_priority_cols + rest_cols
+
+# If normalized_organism is present, drop organism (redundant)
+if "normalized_organism" in selected:
+    selected = [c for c in selected if c != "organism"]
 
 # Print summary
 type_map = {pinned: "category"} if pinned else {}
@@ -175,7 +187,7 @@ config = {
     "feature_types": feature_types,
     "n_bins": 10,
     "start_chns": list(range(len(selected))),
-    "feature_labels": list(selected),
+    "feature_labels": ["organism" if c == "normalized_organism" else c for c in selected],
 }
 
 with open(out_path, "w") as f:
