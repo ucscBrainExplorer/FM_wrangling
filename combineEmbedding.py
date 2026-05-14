@@ -59,11 +59,13 @@ uce_only = args.uce_only
 
 if embedding =="uce":
     embedding_outfile = "uce.h5"
-    data_dirs =["UCE_npy_obs"]
+    data_dirs =["UCE_npy_obs", "duplicate_UCE"]
+    dup_dir = "duplicate_UCE"
     n_cols = 1280
 elif embedding == "scimilarity":
     embedding_outfile = "scimilarity.h5"
-    data_dirs =["SCimilarity_npy_obs"]
+    data_dirs =["SCimilarity_npy_obs", "duplicate_SCimilarity"]
+    dup_dir = "duplicate_SCimilarity"
     n_cols = 128
 else:
     print ("embedding method not supported yet")
@@ -81,12 +83,46 @@ ucsc_file = "datasetLists/ucsc_datasets.txt"
 cgCensus_non_primary_file ="datasetLists/cgCensus_non_primary_datasets.txt"
 ignore_file = "datasetLists/ignore_datasets.txt"
 
+if os.path.isdir(dup_dir):
+    with open(ignore_file) as f:
+        ignore_ids = {line.strip().split("\t")[0] for line in f
+                      if line.strip() and not line.startswith("#")}
+    dup_ids = {f.removesuffix(f"_{embedding}.npy")
+               for f in os.listdir(dup_dir) if f.endswith(".npy")}
+    missing_from_ignore = dup_ids - ignore_ids
+    if missing_from_ignore:
+        print(f"ERROR: {dup_dir} datasets not in ignore_datasets.txt:")
+        for mid in sorted(missing_from_ignore):
+            print(f"  {mid}")
+        sys.exit(1)
+
+with open(ucsc_file) as f:
+    ucsc_ids = {line.strip().split("\t")[0] for line in f
+                if line.strip() and not line.startswith("#")}
+for check_dir in set(data_dirs + [dup_dir]):
+    if not os.path.isdir(check_dir):
+        continue
+    ucsc_file_ids = {f.removesuffix(f"_{embedding}.npy")
+                     for f in os.listdir(check_dir)
+                     if f.endswith(".npy") and f.startswith("ucsc-")}
+    missing_from_ucsc = ucsc_file_ids - ucsc_ids
+    if missing_from_ucsc:
+        print(f"ERROR: {check_dir} ucsc datasets not in ucsc_datasets.txt:")
+        for mid in sorted(missing_from_ucsc):
+            print(f"  {mid}")
+        sys.exit(1)
+
 dataset_list = []
 obs_list =[]
 cellCount = 0
-harmonized_datasets = []       # (real_dataset_id, dataset_id, mapped_filepath, doc_filepath) — remap file used
-ucsc_harmonized_datasets = []  # (real_dataset_id, dataset_id) — ucsc harmonized_cell_label used
-fallback_datasets = []         # (real_dataset_id, dataset_id) — fell back to CellxGene cell_type
+remapfile_exist_datasets = []             # (real_dataset_id, dataset_id, mapped_filepath, doc_filepath)
+                                          #   remap file (_remap.tsv + _obs_mapped.tsv.gz) found — UCSC curated CL mapping applied
+harmonized_cell_label_exist_datasets = [] # (real_dataset_id, dataset_id, doc_filepath)
+                                          #   obs already contains harmonized_cell_label column — passed through as-is
+fallback_cell_type_datasets = []          # (real_dataset_id, dataset_id)
+                                          #   no UCSC harmonization; fell back to CellxGene cell_type / cell_type_ontology_term_id
+no_harmonization_datasets = []            # (real_dataset_id, dataset_id)
+                                          #   no UCSC harmonization and no cell_type column (e.g. ABC Atlas); harmonized_cell_label set to NaN
 arr_dtype = np.dtype('float32')
 counter = 0
 select_cols = ['disease', 'disease_ontology_term_id',
@@ -208,18 +244,23 @@ for singleDir in data_dirs:
                 obs["harmonized_cell_label_ontology_term_id"] = mapped_obs["mapped_cell_label_ontology_term_id"].values
                 obs["harmonized_cell_label"] = mapped_obs["mapped_cell_label"].values
                 obs["harmonized_cell_label_source"] = "ucsc"
-                harmonized_datasets.append((real_dataset_id, dataset_id, mapped_filepath, doc_filepath))
+                remapfile_exist_datasets.append((real_dataset_id, dataset_id, mapped_filepath, doc_filepath))
             else:
                 if "harmonized_cell_label_ontology_term_id" in obs.columns:
                     obs["harmonized_cell_label_ontology_term_id"] = obs["harmonized_cell_label_ontology_term_id"]
                     obs["harmonized_cell_label"] = obs["harmonized_cell_label"]
                     obs["harmonized_cell_label_source"] = "ucsc"
-                    ucsc_harmonized_datasets.append((real_dataset_id, dataset_id, doc_filepath))
-                else:
+                    harmonized_cell_label_exist_datasets.append((real_dataset_id, dataset_id, doc_filepath))
+                elif "cell_type_ontology_term_id" in obs.columns:
                     obs["harmonized_cell_label_ontology_term_id"] = obs["cell_type_ontology_term_id"]
                     obs["harmonized_cell_label"] = obs["cell_type"]
                     obs["harmonized_cell_label_source"] = "cell_type"
-                    fallback_datasets.append((real_dataset_id, dataset_id))
+                    fallback_cell_type_datasets.append((real_dataset_id, dataset_id))
+                else:
+                    obs["harmonized_cell_label_ontology_term_id"] = np.nan
+                    obs["harmonized_cell_label"] = np.nan
+                    obs["harmonized_cell_label_source"] = np.nan
+                    no_harmonization_datasets.append((real_dataset_id, dataset_id))
 
             # First condition: no NaNs in the row
             mask_uce = ~np.isnan(uce).any(axis=1) # Keep rows where no NaN is present
@@ -332,9 +373,9 @@ with open(wrangling_notes_path, "w") as wf:
     wf.write("Add column 'harmonized_cell_label_ontology_term_id': CL term ID paired with harmonized_cell_label\n")
     wf.write("Add column 'harmonized_cell_label_source': 'ucsc' (remap or harmonized_cell_label) or 'cell_type' (CellxGene fallback)\n")
     wf.write(f"\nDatasets processed: {len(dataset_list)}\n")
-    if harmonized_datasets:
-        wf.write(f"\nUCSC remap harmonization applied ({len(harmonized_datasets)} datasets):\n")
-        for real_ds_id, ds_id, mapped_fp, doc_fp in harmonized_datasets:
+    if remapfile_exist_datasets:
+        wf.write(f"\nUCSC remap harmonization applied ({len(remapfile_exist_datasets)} datasets):\n")
+        for real_ds_id, ds_id, mapped_fp, doc_fp in remapfile_exist_datasets:
             doi, title = _dataset_info(ds_id, ucsc_datasets, cxgInfo, ucscInfo)
             wf.write(f"\n  {real_ds_id}  '{title}'  {doi}\n")
             if os.path.exists(doc_fp):
@@ -342,9 +383,9 @@ with open(wrangling_notes_path, "w") as wf:
                     for line in doc_f:
                         wf.write("    " + line)
                 wf.write("\n")
-    if ucsc_harmonized_datasets:
-        wf.write(f"\nUCSC harmonized_cell_label used ({len(ucsc_harmonized_datasets)} datasets):\n")
-        for real_ds_id, ds_id, doc_fp in ucsc_harmonized_datasets:
+    if harmonized_cell_label_exist_datasets:
+        wf.write(f"\nUCSC harmonized_cell_label used ({len(harmonized_cell_label_exist_datasets)} datasets):\n")
+        for real_ds_id, ds_id, doc_fp in harmonized_cell_label_exist_datasets:
             doi, title = _dataset_info(ds_id, ucsc_datasets, cxgInfo, ucscInfo)
             wf.write(f"\n  {real_ds_id}  '{title}'  {doi}\n")
             if os.path.exists(doc_fp):
@@ -352,9 +393,14 @@ with open(wrangling_notes_path, "w") as wf:
                     for line in doc_f:
                         wf.write("    " + line)
                 wf.write("\n")
-    if fallback_datasets:
-        wf.write(f"\nFallback to CellxGene cell_type ({len(fallback_datasets)} datasets):\n")
-        for real_ds_id, ds_id in fallback_datasets:
+    if fallback_cell_type_datasets:
+        wf.write(f"\nFallback to CellxGene cell_type ({len(fallback_cell_type_datasets)} datasets):\n")
+        for real_ds_id, ds_id in fallback_cell_type_datasets:
+            doi, title = _dataset_info(ds_id, ucsc_datasets, cxgInfo, ucscInfo)
+            wf.write(f"  {real_ds_id}  '{title}'  {doi}\n")
+    if no_harmonization_datasets:
+        wf.write(f"\nNo harmonization — harmonized_cell_label and harmonized_cell_label_ontology_term_id set to NaN ({len(no_harmonization_datasets)} datasets):\n")
+        for real_ds_id, ds_id in no_harmonization_datasets:
             doi, title = _dataset_info(ds_id, ucsc_datasets, cxgInfo, ucscInfo)
             wf.write(f"  {real_ds_id}  '{title}'  {doi}\n")
 print(f"Wrangling notes written to {wrangling_notes_path}")
