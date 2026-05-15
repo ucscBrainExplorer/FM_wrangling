@@ -75,6 +75,8 @@ HIGH_PRIORITY = {
     "collection_doi_label",
     "publication",
     "normalized_organism",
+    "subclass",
+    "class",
 }
 
 FORCE_CATEGORY = {"cluster"}
