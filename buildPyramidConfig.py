@@ -56,8 +56,10 @@ SKIP_COLS = {
     "harmonized_cell_label_ontology_term_match_method",
     "singler_celltype_ontology", "scimilarity_celltype_ontology",
     "consensus_celltype_ontology", "collection_doi",
-    "consensus_celltype_annotation",
     "n_genes",
+    "x", "y",
+    "x_ccf", "y_ccf", "z_ccf",
+    "x_section", "y_section", "z_section",
 }
 
 # High-priority columns — always included, listed before alphabetical remainder
@@ -98,7 +100,7 @@ def classify_column(col, series):
         return None, f"only {n_unique} unique value"
 
     is_cell_label = any(k in col.lower() for k in
-                        ["cell_label", "cell_type", "celltype", "annotation", "author_label"])
+                        ["cell_type", "celltype", "annotation", "author_label"])
     if not is_numeric and not is_cell_label and n_unique > 100:
         return None, f"too many categories ({n_unique})"
 
@@ -106,7 +108,7 @@ def classify_column(col, series):
 
 # Determine the top cell label column to pin first
 CELL_LABEL_CANDIDATES = [
-    "harmonized_cell_label", "custom_cell_type", "cell_type", "celltype", "cell_label",
+    "harmonized_cell_label", "custom_cell_type", "cell_type", "celltype",
     "cell_type_annotation", "author_cell_type",
 ]
 if args.pinned:
