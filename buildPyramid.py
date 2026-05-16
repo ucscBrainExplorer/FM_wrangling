@@ -27,6 +27,8 @@ parser.add_argument("--results_dir", required=True,
                     help="Directory containing the UMAP .npy and metadata TSV referenced by the pyramid config")
 parser.add_argument("--pyramid_file", required=True,
                     help="Pyramid config JSON filename inside results_dir (e.g. pyramid_e30_config.json)")
+parser.add_argument("--metadata_only", action="store_true",
+                    help="Generate metadata.json without building pyramid tiles")
 args = parser.parse_args()
 
 results_dir  = args.results_dir
@@ -340,6 +342,9 @@ print(f"image_scalef: {image_scalef}  offset_x: {offset_x}  offset_y: {offset_y}
 
 # ── Build tiles ───────────────────────────────────────────────────────────────
 
+height, width = get_umap_df_dim(UMAP_df)
+max_level = determine_maxLevel(height, width)
+
 for feature, start_chn, viz_label, feature_type, n_bins in zip(
         features, start_chns, feature_labels, feature_types, n_bins_list):
 
@@ -350,52 +355,54 @@ for feature, start_chn, viz_label, feature_type, n_bins in zip(
         categories_int, cat_list = findCodes(data, feature)
 
     depth_bit = find_depth_bit(cat_list)
-    array_2d_cat, max_level = build_array_2d_cat(UMAP_df, tilesize)
 
-    # density threshold lookup
-    init_density_threshold = {
-        4: 1.0 / 2.0,
-        5: 1.0 / 4.0,
-        6: 1.0 / 4.0,
-        7: 1.0 / (4.0 * 2.0),
-        8: 1.0 / (4.0 * 4.0),
-        9: 1.0 / (4.0 * 4.0 * 4.0),
-        10: 1.0 / (4.0 * 4.0 * 4.0 * 2.0),
-    }.get(max_level)
+    if not args.metadata_only:
+        array_2d_cat, max_level = build_array_2d_cat(UMAP_df, tilesize)
 
-    if init_density_threshold is None:
-        print(f"WARNING: no density threshold defined for max_level={max_level}")
+        # density threshold lookup
+        init_density_threshold = {
+            4: 1.0 / 2.0,
+            5: 1.0 / 4.0,
+            6: 1.0 / 4.0,
+            7: 1.0 / (4.0 * 2.0),
+            8: 1.0 / (4.0 * 4.0),
+            9: 1.0 / (4.0 * 4.0 * 4.0),
+            10: 1.0 / (4.0 * 4.0 * 4.0 * 2.0),
+        }.get(max_level)
 
-    level           = max_level
-    current         = array_2d_cat
-    current_base_area = 1
-    block_size      = 2
-    step            = 2.0
-    threshold_level = max_level
-    next_base_area  = current_base_area * block_size * block_size
-    next_threshold  = init_density_threshold / step
-    categories_size = len(cat_list) - 1
+        if init_density_threshold is None:
+            print(f"WARNING: no density threshold defined for max_level={max_level}")
 
-    print("Begin downsampling ...")
-    while level > 0:
-        result = downsample_categorical_by_frequency(
-            current, next_base_area, categories_size, next_threshold, block_size=block_size)
-        level -= 1
-        print(f"Downsampled to level: {level}  count: {result.shape}")
+        level           = max_level
+        current         = array_2d_cat
+        current_base_area = 1
+        block_size      = 2
+        step            = 2.0
+        threshold_level = max_level
+        next_base_area  = current_base_area * block_size * block_size
+        next_threshold  = init_density_threshold / step
+        categories_size = len(cat_list) - 1
 
-        if level < threshold_level:
-            saveAsTiles(result, level, tilesize, depth_bit, start_chn, build_dir, target_dir)
-            print(f"Saved tiles, level {level}")
+        print("Begin downsampling ...")
+        while level > 0:
+            result = downsample_categorical_by_frequency(
+                current, next_base_area, categories_size, next_threshold, block_size=block_size)
+            level -= 1
+            print(f"Downsampled to level: {level}  count: {result.shape}")
 
-        current        = result
-        next_base_area = next_base_area * block_size * block_size
-        next_threshold = next_threshold / step
+            if level < threshold_level:
+                saveAsTiles(result, level, tilesize, depth_bit, start_chn, build_dir, target_dir)
+                print(f"Saved tiles, level {level}")
+
+            current        = result
+            next_base_area = next_base_area * block_size * block_size
+            next_threshold = next_threshold / step
+
+        if threshold_level == max_level:
+            saveAsTiles(array_2d_cat, max_level, tilesize, depth_bit, start_chn, build_dir, target_dir)
 
     write_json(reference_name, viz_label, start_chn, cat_list, feature_type,
                tilesize, max_level, offset_x, offset_y, image_scalef)
-
-    if threshold_level == max_level:
-        saveAsTiles(array_2d_cat, max_level, tilesize, depth_bit, start_chn, build_dir, target_dir)
 
 # ── Cleanup ───────────────────────────────────────────────────────────────────
 shutil.rmtree(build_dir, ignore_errors=True)

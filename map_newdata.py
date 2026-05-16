@@ -64,7 +64,7 @@ def classify_column(col, series):
     n_total = len(series)
     null_rate = series.isnull().sum() / n_total
     n_unique = series.nunique()
-    is_numeric = pd.api.types.is_numeric_dtype(series)
+    is_numeric = pd.api.types.is_float_dtype(series)
     feature_type = "continuous" if (is_numeric and n_unique > 20 and col.lower() not in FORCE_CATEGORY) else "category"
 
     if null_rate > 0.5:
@@ -73,9 +73,10 @@ def classify_column(col, series):
         return None, f"only {n_unique} unique value"
 
     is_cell_label = any(k in col.lower() for k in
-                        ["label", "celltype", "cell_type", "annotation", "harmoniz", "region"])
-    if not is_numeric and not is_cell_label and n_unique > 100:
-        return None, f"too many categories ({n_unique})"
+                        ["label", "celltype", "cell_type", "annotation", "harmoniz", "region", "cluster"])
+    cardinality_threshold = int(n_total ** 0.5)
+    if not is_numeric and not is_cell_label and n_unique > cardinality_threshold:
+        return None, f"too many categories ({n_unique}, threshold {cardinality_threshold})"
 
     return feature_type, None
 

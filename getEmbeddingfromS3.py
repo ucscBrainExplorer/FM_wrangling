@@ -45,13 +45,13 @@ else:
 def saveUCE (adata, prefix_id, results_dir):
     uce_df = pd.DataFrame(adata.obsm['X_uce'])
     np.save(os.path.join(results_dir, f'{prefix_id}_uce.npy'), uce_df)
-    adata.obs.to_csv(os.path.join(results_dir, f'{prefix_id}_obs.tsv') , sep='\t')
-
+    adata.obs.to_csv(os.path.join(results_dir, f'{prefix_id}_obs.tsv.gz'), sep='\t', compression='gzip')
+    
 def saveSCimilarity (adata, prefix_id, results_dir):
     scimilarity_df = pd.DataFrame(adata.obsm['X_scimilarity'])
     np.save(os.path.join(results_dir, f'{prefix_id}_scimilarity.npy'), scimilarity_df)
-    adata.obs.to_csv(os.path.join(results_dir, f'{prefix_id}_obs.tsv') , sep='\t')
-
+    adata.obs.to_csv(os.path.join(results_dir, f'{prefix_id}_obs.tsv.gz'), sep='\t', compression='gzip')
+    
 def result_exists(prefix_id, results_dir, embedding):
     if os.path.exists(os.path.join(results_dir, f'{prefix_id}_{embedding}.npy')):
         return True
