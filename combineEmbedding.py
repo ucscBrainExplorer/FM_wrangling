@@ -75,7 +75,7 @@ os.makedirs(results_dir, exist_ok=True)
 select_datasets = []
 if args.select_datasets_file:
     with open(args.select_datasets_file, 'r') as f:
-        select_datasets = [line.strip() for line in f if line.strip()]
+        select_datasets = [line.strip().split("\t")[0] for line in f if line.strip() and not line.startswith("#")]
 
 obs_outfile = "obs.tsv.gz"
 
@@ -325,8 +325,8 @@ if not uce_only:
     if shuffle:
         print("Shuffling cells...")
         idx = np.random.permutation(len(combined_obs))
-        np.save(os.path.join(results_dir, "shuffle_index.npy"), idx)
-        print(f"Shuffle index saved to {os.path.join(results_dir, 'shuffle_index.npy')}")
+        np.save(os.path.join(results_dir, "shuffle_index.uce.npy"), idx)
+        print(f"Shuffle index saved to {os.path.join(results_dir, 'shuffle_index.uce.npy')}")
         combined_obs = combined_obs.iloc[idx].reset_index(drop=True)
         # shuffle uce in sync using same index
         uce_path = os.path.join(results_dir, embedding_outfile)

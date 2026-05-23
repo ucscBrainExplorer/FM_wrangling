@@ -171,6 +171,7 @@ def process_files_via_h5 (
     # --- Create HDF5 dataset (dynamically resizable) ---
     h5f = h5py.File(embedding_path_h5, "w")
     dset = None
+    col_order = None
     start = 0
 
     for file in files:
@@ -185,9 +186,9 @@ def process_files_via_h5 (
         # --- Read from .h5ad ---
         adata = sc.read_h5ad(local_path, backed="r")
         if embedding == "uce":
-            x = adata.obsm["X_uce"]  # (n_cells, n_features)
+            x = np.array(adata.obsm["X_uce"])  # (n_cells, n_features)
         elif embedding == "scimilarity":
-            x = adata.obsm["X_scimilarity"]  # (n_cells, n_features)
+            x = np.array(adata.obsm["X_scimilarity"])  # (n_cells, n_features)
 
         n_new, n_features = x.shape
 
@@ -217,10 +218,16 @@ def process_files_via_h5 (
         dset[-n_new:] = x
 
         # --- Append metadata ---
-        mode = "a" if os.path.exists(obs_path) else "w"
-        header = not os.path.exists(obs_path)
         obs_df = adata.obs.rename(columns={"unique_dataset_id": "dataset_id"})
-        obs_df.to_csv(obs_path, sep="\t", mode=mode, header=header)
+        if col_order is None:
+            col_order = obs_df.columns.tolist()
+            obs_df.to_csv(obs_path, sep="\t", mode="w", header=True)
+        else:
+            missing = [c for c in col_order if c not in obs_df.columns]
+            if missing:
+                warnings.warn(f"Batch {file} missing columns {missing}; filling with NA")
+            obs_df = obs_df.reindex(columns=col_order)
+            obs_df.to_csv(obs_path, sep="\t", mode="a", header=False)
 
         start += n_new
 

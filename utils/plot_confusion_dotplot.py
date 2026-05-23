@@ -100,13 +100,18 @@ scatter = ax.scatter(
 plt.colorbar(scatter, ax=ax, label="Fraction of GT class")
 
 ax.set_xticks(range(n_pred))
-ax.set_xticklabels(pred_order, rotation=60, ha="right", fontsize=11)
+ax.set_xticklabels(pred_order, rotation=60, ha="right", fontsize=14)
 ax.set_yticks(range(n_gt))
-ax.set_yticklabels(gt_labels, fontsize=11)
-ax.set_xlabel("Predicted label", fontsize=13)
-ax.set_ylabel("Ground truth label", fontsize=13)
+ax.set_yticklabels(gt_labels, fontsize=14)
+ax.set_xlabel("Predicted label", fontsize=15)
+ax.set_ylabel("Ground truth label", fontsize=15)
+
+ax2 = ax.twiny()
+ax2.set_xticks(range(n_pred))
+ax2.set_xticklabels(pred_order, rotation=60, ha="left", fontsize=14, rotation_mode="anchor")
 ax.set_title(f"{args.gt_col}  vs  {args.pred_col}\n(dots ≥ {args.min_frac:.0%} of GT class)", fontsize=13)
 ax.set_xlim(-0.5, n_pred - 0.5)
+ax2.set_xlim(-0.5, n_pred - 0.5)
 ax.set_ylim(-0.5, n_gt - 0.5)
 ax.grid(True, linewidth=0.3, alpha=0.4)
 

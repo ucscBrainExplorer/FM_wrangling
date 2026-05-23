@@ -26,18 +26,14 @@ import os
 
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--out-dir", required=True,
+                        help="Output directory — uce.h5/.npy, obs.tsv.gz, shuffle_index.npy written here")
     parser.add_argument("--seed", type=int, default=None,
                         help="Random seed for reproducibility (default: random each run)")
     parser.add_argument("--uce-in",  default="uce.h5",
                         help="Input embeddings file, .h5 or .npy (default: uce.h5)")
     parser.add_argument("--obs-in",  default="obs.tsv.gz",
                         help="Input obs TSV file (default: obs.tsv.gz)")
-    parser.add_argument("--uce-out", default=None,
-                        help="Output embeddings file (default: <uce-in stem>_shuffled.h5/.npy)")
-    parser.add_argument("--obs-out", default=None,
-                        help="Output obs TSV file (default: obs_shuffled.tsv.gz)")
-    parser.add_argument("--idx-out", default="shuffle_index.npy",
-                        help="File to save the permutation index (default: shuffle_index.npy)")
     parser.add_argument("--chunked", action="store_true", default=False,
                         help="Memory-efficient chunked mode (.h5 only). Slower but uses ~2x chunk RAM instead of 2x full array.")
     parser.add_argument("--chunk-size", type=int, default=250_000,
@@ -46,16 +42,12 @@ def parse_args():
 
 
 def derive_output_names(args):
+    import os
+    os.makedirs(args.out_dir, exist_ok=True)
     read_npy = args.uce_in.endswith(".npy")
-    if args.uce_out is None:
-        if read_npy:
-            args.uce_out = args.uce_in[:-4] + "_shuffled.npy"
-        else:
-            stem = args.uce_in[:-3] if args.uce_in.endswith(".h5") else args.uce_in
-            args.uce_out = stem + "_shuffled.h5"
-    if args.obs_out is None:
-        stem = args.obs_in[:-7] if args.obs_in.endswith(".tsv.gz") else args.obs_in
-        args.obs_out = stem + "_shuffled.tsv.gz"
+    args.uce_out = os.path.join(args.out_dir, "uce.h5")
+    args.obs_out = os.path.join(args.out_dir, "obs.tsv.gz")
+    args.idx_out = os.path.join(args.out_dir, "shuffle_index.npy")
     return read_npy
 
 
@@ -85,40 +77,41 @@ def shuffle_default(args, idx, n_rows, read_npy):
     del data
 
     print(f"Writing {args.uce_out} ...")
-    if args.uce_out.endswith(".npy"):
-        np.save(args.uce_out, data_shuffled)
-    else:
-        with h5py.File(args.uce_out, "w") as f:
-            f.create_dataset("data", data=data_shuffled, compression="gzip", compression_opts=4)
+    with h5py.File(args.uce_out, "w") as f:
+        f.create_dataset("data", data=data_shuffled, compression="gzip", compression_opts=4)
     print(f"  shape: {data_shuffled.shape}")
 
 
 def shuffle_chunked(args, idx, n_rows, n_cols, dtype):
-    """Memory-efficient shuffle using sort-then-unsort for sequential HDF5 reads."""
-    if not args.uce_in.endswith(".h5"):
-        raise ValueError("--chunked mode only supported for .h5 files")
+    """Memory-efficient shuffle using sort-then-unsort for sequential reads."""
 
     chunk_size = args.chunk_size
     chunk_bytes = 2 * chunk_size * n_cols * dtype.itemsize
     n_chunks = (n_rows + chunk_size - 1) // chunk_size
     print(f"Chunked mode: {n_chunks} chunks of {chunk_size:,} rows  |  ~{chunk_bytes/1024**3:.2f} GB per chunk")
 
-    with h5py.File(args.uce_in, "r") as f_in, h5py.File(args.uce_out, "w") as f_out:
-        ds_out = f_out.create_dataset("data", shape=(n_rows, n_cols), dtype=dtype,
-                                      compression="gzip", compression_opts=4)
+    read_npy = args.uce_in.endswith(".npy")
+    mmap_in  = np.load(args.uce_in, mmap_mode="r") if read_npy else None
+
+    def do_chunks(f_in, ds_out):
         for i in range(n_chunks):
-            out_start = i * chunk_size
-            out_end   = min(out_start + chunk_size, n_rows)
-
-            src_rows   = idx[out_start:out_end]          # which input rows feed this output chunk
-            sort_order = np.argsort(src_rows)             # sort for sequential HDF5 reads
+            out_start  = i * chunk_size
+            out_end    = min(out_start + chunk_size, n_rows)
+            src_rows   = idx[out_start:out_end]
+            sort_order = np.argsort(src_rows)
             sorted_src = src_rows[sort_order]
-
-            data = f_in["data"][sorted_src]               # sequential read
-            data = data[np.argsort(sort_order)]           # restore correct output order
-
+            data = mmap_in[sorted_src] if read_npy else f_in["data"][sorted_src]
+            data = data[np.argsort(sort_order)]
             ds_out[out_start:out_end] = data
             print(f"  chunk {i+1}/{n_chunks}: output rows {out_start:,}–{out_end:,}")
+
+    f_in_ctx = open(args.uce_in, "rb") if read_npy else h5py.File(args.uce_in, "r")
+    with h5py.File(args.uce_out, "w") as f_out:
+        ds_out = f_out.create_dataset("data", shape=(n_rows, n_cols), dtype=dtype,
+                                      compression="gzip", compression_opts=4)
+        do_chunks(None if read_npy else f_in_ctx, ds_out)
+    if not read_npy:
+        f_in_ctx.close()
 
 
 def shuffle_obs(args, idx, n_rows):
