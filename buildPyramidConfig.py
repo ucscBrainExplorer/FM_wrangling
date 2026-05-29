@@ -38,12 +38,20 @@ parser.add_argument("--pinned", default=None,
 args = parser.parse_args()
 
 obs_path = os.path.join(args.results_dir, args.metadata_file)
+
+# Validate --pinned before paying the cost of loading the full file
+if args.pinned:
+    header_cols = pd.read_csv(obs_path, sep='\t', nrows=0).columns.tolist()
+    if args.pinned not in header_cols:
+        raise ValueError(f"--pinned column '{args.pinned}' not found in {obs_path}\n"
+                         f"Available columns: {header_cols}")
+
 print(f"Reading {obs_path} ...")
 obs = pd.read_csv(obs_path, sep='\t', low_memory=False)
 
 # Columns to always skip — IDs, QC numerics, ontology term IDs
 SKIP_COLS = {
-    "Unnamed: 0", "old_index", "barcodes", "sample_id",
+    "Unnamed: 0", "old_index", "barcodes",
     "is_primary_data", "sizeFactor",
     "prob_compromised", "sum", "detected", "filtered_cell_count",
     "processed_cells", "submitter_id",
@@ -96,12 +104,10 @@ def classify_column(col, series):
 
     if null_rate > 0.5:
         return None, f"{null_rate:.0%} null"
-    if n_unique <= 1:
-        return None, f"only {n_unique} unique value"
 
     is_cell_label = any(k in col.lower() for k in
                         ["cell_type", "celltype", "annotation", "author_label"])
-    if not is_numeric and not is_cell_label and n_unique > 100:
+    if not is_numeric and not is_cell_label and n_unique > n_total / 10:
         return None, f"too many categories ({n_unique})"
 
     return feature_type, None
@@ -112,8 +118,6 @@ CELL_LABEL_CANDIDATES = [
     "cell_type_annotation", "author_cell_type",
 ]
 if args.pinned:
-    if args.pinned not in obs.columns:
-        raise ValueError(f"--pinned column '{args.pinned}' not found in {obs_path}")
     pinned = args.pinned
 else:
     pinned = next((c for c in CELL_LABEL_CANDIDATES if c in obs.columns), None)

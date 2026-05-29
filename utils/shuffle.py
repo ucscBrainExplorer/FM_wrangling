@@ -6,8 +6,11 @@ permutation so that row ordering stays consistent between the two files.
 
 Modes:
   default   — loads the full array into RAM twice (fast, needs 2× data size in RAM)
-  --chunked — reads/writes in chunks using sort-then-unsort for sequential HDF5
-              access (slow, needs only ~2× chunk_size rows in RAM at a time)
+  --chunked — sequential scatter-gather using temp files on --nvme_dir scratch space.
+              One sequential pass through the source writes rows to 26 temp chunk files
+              on NVMe; a second pass concatenates them into the shuffled output.
+              RAM usage: ~one read buffer (~2.4 GB). NVMe usage: ~33 GB temp files.
+              Works efficiently on EFS (sequential reads only).
               Only supported for .h5 input/output.
 
 Outputs:
@@ -35,14 +38,18 @@ def parse_args():
     parser.add_argument("--obs-in",  default="obs.tsv.gz",
                         help="Input obs TSV file (default: obs.tsv.gz)")
     parser.add_argument("--chunked", action="store_true", default=False,
-                        help="Memory-efficient chunked mode (.h5 only). Slower but uses ~2x chunk RAM instead of 2x full array.")
+                        help="Memory-efficient chunked mode (.h5 only). One sequential read pass "
+                             "scatters rows to NVMe temp files; a second pass gathers into output.")
     parser.add_argument("--chunk-size", type=int, default=250_000,
-                        help="Rows per chunk in --chunked mode (default: 250000, ~1.3 GB for 1280-dim float32)")
+                        help="Rows per output chunk (default: 250000, ~1.3 GB for 1280-dim float32)")
+    parser.add_argument("--read-size", type=int, default=50_000,
+                        help="Rows per sequential read from source in chunked mode (default: 50000)")
+    parser.add_argument("--nvme-dir", default="/nvme",
+                        help="Scratch space for temp chunk files in --chunked mode (default: /nvme)")
     return parser.parse_args()
 
 
 def derive_output_names(args):
-    import os
     os.makedirs(args.out_dir, exist_ok=True)
     read_npy = args.uce_in.endswith(".npy")
     args.uce_out = os.path.join(args.out_dir, "uce.h5")
@@ -83,35 +90,86 @@ def shuffle_default(args, idx, n_rows, read_npy):
 
 
 def shuffle_chunked(args, idx, n_rows, n_cols, dtype):
-    """Memory-efficient shuffle using sort-then-unsort for sequential reads."""
+    """
+    Memory-efficient shuffle via scatter-gather with NVMe temp files.
 
+    Phase 1 — Scatter (one sequential read pass through source):
+      For each read block, determine which output chunk each row belongs to
+      and append it to that chunk's temp file on NVMe.
+
+    Phase 2 — Gather (sequential read of each temp file):
+      Concatenate chunk temp files in order into the final shuffled output H5.
+    """
     chunk_size = args.chunk_size
-    chunk_bytes = 2 * chunk_size * n_cols * dtype.itemsize
-    n_chunks = (n_rows + chunk_size - 1) // chunk_size
-    print(f"Chunked mode: {n_chunks} chunks of {chunk_size:,} rows  |  ~{chunk_bytes/1024**3:.2f} GB per chunk")
+    read_size  = args.read_size
+    n_chunks   = (n_rows + chunk_size - 1) // chunk_size
+    nvme_dir   = args.nvme_dir
 
-    read_npy = args.uce_in.endswith(".npy")
-    mmap_in  = np.load(args.uce_in, mmap_mode="r") if read_npy else None
+    print(f"Chunked scatter-gather mode:")
+    print(f"  {n_chunks} output chunks of {chunk_size:,} rows")
+    print(f"  read block size: {read_size:,} rows")
+    print(f"  temp files: {nvme_dir}/chunk_XXXX.npy")
 
-    def do_chunks(f_in, ds_out):
-        for i in range(n_chunks):
-            out_start  = i * chunk_size
-            out_end    = min(out_start + chunk_size, n_rows)
-            src_rows   = idx[out_start:out_end]
-            sort_order = np.argsort(src_rows)
-            sorted_src = src_rows[sort_order]
-            data = mmap_in[sorted_src] if read_npy else f_in["data"][sorted_src]
-            data = data[np.argsort(sort_order)]
-            ds_out[out_start:out_end] = data
-            print(f"  chunk {i+1}/{n_chunks}: output rows {out_start:,}–{out_end:,}")
+    # build inverse index: for each source row, which output chunk does it go to?
+    # inv_idx[src_row] = output_position
+    print("Building inverse shuffle index...")
+    inv_idx = np.empty(n_rows, dtype=np.int64)
+    inv_idx[idx] = np.arange(n_rows, dtype=np.int64)
+    # chunk assignment for each source row
+    chunk_assign = inv_idx // chunk_size  # which chunk (0..n_chunks-1)
+    chunk_pos    = inv_idx % chunk_size   # position within that chunk
 
-    f_in_ctx = open(args.uce_in, "rb") if read_npy else h5py.File(args.uce_in, "r")
+    # Phase 1: scatter
+    print(f"\nPhase 1 — Scatter: reading {args.uce_in} sequentially...")
+    # pre-allocate chunk buffers (one at a time to save RAM)
+    # use temp .npy files per chunk
+    tmp_paths = [os.path.join(nvme_dir, f"chunk_{i:04d}.npy") for i in range(n_chunks)]
+    chunk_sizes_actual = [min(chunk_size, n_rows - i * chunk_size) for i in range(n_chunks)]
+
+    # pre-create temp files as memmaps
+    print("  Pre-allocating temp chunk files on NVMe...")
+    chunk_mmaps = []
+    for i, (tmp_path, cs) in enumerate(zip(tmp_paths, chunk_sizes_actual)):
+        m = np.memmap(tmp_path, dtype=dtype, mode="w+", shape=(cs, n_cols))
+        chunk_mmaps.append(m)
+
+    with h5py.File(args.uce_in, "r") as f_in:
+        src = f_in["data"]
+        n_read_blocks = (n_rows + read_size - 1) // read_size
+        for b in range(n_read_blocks):
+            src_start = b * read_size
+            src_end   = min(src_start + read_size, n_rows)
+            block = src[src_start:src_end]  # sequential read
+
+            # scatter rows to their output chunks
+            for local_i, src_row in enumerate(range(src_start, src_end)):
+                c  = chunk_assign[src_row]
+                p  = chunk_pos[src_row]
+                chunk_mmaps[c][p] = block[local_i]
+
+            if (b + 1) % 10 == 0 or b == n_read_blocks - 1:
+                print(f"  scatter block {b+1}/{n_read_blocks}: "
+                      f"rows {src_start:,}–{src_end:,}")
+
+    # flush all mmaps
+    for m in chunk_mmaps:
+        del m
+
+    # Phase 2: gather
+    print(f"\nPhase 2 — Gather: writing {args.uce_out}...")
     with h5py.File(args.uce_out, "w") as f_out:
         ds_out = f_out.create_dataset("data", shape=(n_rows, n_cols), dtype=dtype,
                                       compression="gzip", compression_opts=4)
-        do_chunks(None if read_npy else f_in_ctx, ds_out)
-    if not read_npy:
-        f_in_ctx.close()
+        for i, (tmp_path, cs) in enumerate(zip(tmp_paths, chunk_sizes_actual)):
+            out_start = i * chunk_size
+            out_end   = out_start + cs
+            chunk_data = np.load(tmp_path)
+            ds_out[out_start:out_end] = chunk_data
+            del chunk_data
+            os.remove(tmp_path)
+            print(f"  chunk {i+1}/{n_chunks}: output rows {out_start:,}–{out_end:,}")
+
+    print("Scatter-gather complete.")
 
 
 def shuffle_obs(args, idx, n_rows):

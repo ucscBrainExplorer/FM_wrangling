@@ -35,7 +35,7 @@ print(umap_pytorch.__file__)
 # ── column selection (mirrors buildPyramidConfig.py) ─────────────────────────
 
 SKIP_COLS = {
-    "Unnamed: 0", "old_index", "barcodes", "sample_id",
+    "Unnamed: 0", "old_index", "barcodes",
     "is_primary_data", "sizeFactor",
     "prob_compromised", "sum", "detected", "filtered_cell_count",
     "processed_cells", "submitter_id",
@@ -45,10 +45,14 @@ SKIP_COLS = {
     "development_stage_ontology_term_id",
     "self_reported_ethnicity_ontology_term_id",
     "harmonized_cell_label_ontology_term_id",
+    "harmonized_cell_label_ontology_term_match_method",
     "singler_celltype_ontology", "scimilarity_celltype_ontology",
     "consensus_celltype_ontology", "collection_doi",
     "consensus_celltype_annotation",
     "n_genes",
+    "x", "y",
+    "x_ccf", "y_ccf", "z_ccf",
+    "x_section", "y_section", "z_section",
 }
 
 
@@ -69,14 +73,11 @@ def classify_column(col, series):
 
     if null_rate > 0.5:
         return None, f"{null_rate:.0%} null"
-    if n_unique <= 1:
-        return None, f"only {n_unique} unique value"
 
     is_cell_label = any(k in col.lower() for k in
                         ["label", "celltype", "cell_type", "annotation", "harmoniz", "region", "cluster"])
-    cardinality_threshold = int(n_total ** 0.5)
-    if not is_numeric and not is_cell_label and n_unique > cardinality_threshold:
-        return None, f"too many categories ({n_unique}, threshold {cardinality_threshold})"
+    if not is_numeric and not is_cell_label and n_unique > n_total / 10:
+        return None, f"too many categories ({n_unique})"
 
     return feature_type, None
 
