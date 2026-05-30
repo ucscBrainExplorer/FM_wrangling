@@ -46,6 +46,9 @@ def parse_args():
                         help="Rows per sequential read from source in chunked mode (default: 50000)")
     parser.add_argument("--nvme-dir", default="/nvme",
                         help="Scratch space for temp chunk files in --chunked mode (default: /nvme)")
+    parser.add_argument("--gather-only", action="store_true", default=False,
+                        help="Skip Phase 1 (scatter) and go straight to Phase 2 (gather). "
+                             "Use when chunk temp files already exist on --nvme-dir.")
     return parser.parse_args()
 
 
@@ -126,34 +129,38 @@ def shuffle_chunked(args, idx, n_rows, n_cols, dtype):
     tmp_paths = [os.path.join(nvme_dir, f"chunk_{i:04d}.npy") for i in range(n_chunks)]
     chunk_sizes_actual = [min(chunk_size, n_rows - i * chunk_size) for i in range(n_chunks)]
 
-    # pre-create temp files as memmaps
-    print("  Pre-allocating temp chunk files on NVMe...")
+    # pre-create temp files as memmaps (skip if gather-only — files already exist)
     chunk_mmaps = []
-    for i, (tmp_path, cs) in enumerate(zip(tmp_paths, chunk_sizes_actual)):
-        m = np.memmap(tmp_path, dtype=dtype, mode="w+", shape=(cs, n_cols))
-        chunk_mmaps.append(m)
+    if not args.gather_only:
+        print("  Pre-allocating temp chunk files on NVMe...")
+        for i, (tmp_path, cs) in enumerate(zip(tmp_paths, chunk_sizes_actual)):
+            m = np.memmap(tmp_path, dtype=dtype, mode="w+", shape=(cs, n_cols))
+            chunk_mmaps.append(m)
 
-    with h5py.File(args.uce_in, "r") as f_in:
-        src = f_in["data"]
-        n_read_blocks = (n_rows + read_size - 1) // read_size
-        for b in range(n_read_blocks):
-            src_start = b * read_size
-            src_end   = min(src_start + read_size, n_rows)
-            block = src[src_start:src_end]  # sequential read
+    if not args.gather_only:
+        with h5py.File(args.uce_in, "r") as f_in:
+            src = f_in["data"]
+            n_read_blocks = (n_rows + read_size - 1) // read_size
+            for b in range(n_read_blocks):
+                src_start = b * read_size
+                src_end   = min(src_start + read_size, n_rows)
+                block = src[src_start:src_end]  # sequential read
 
-            # scatter rows to their output chunks
-            for local_i, src_row in enumerate(range(src_start, src_end)):
-                c  = chunk_assign[src_row]
-                p  = chunk_pos[src_row]
-                chunk_mmaps[c][p] = block[local_i]
+                # scatter rows to their output chunks
+                for local_i, src_row in enumerate(range(src_start, src_end)):
+                    c  = chunk_assign[src_row]
+                    p  = chunk_pos[src_row]
+                    chunk_mmaps[c][p] = block[local_i]
 
-            if (b + 1) % 10 == 0 or b == n_read_blocks - 1:
-                print(f"  scatter block {b+1}/{n_read_blocks}: "
-                      f"rows {src_start:,}–{src_end:,}")
+                if (b + 1) % 10 == 0 or b == n_read_blocks - 1:
+                    print(f"  scatter block {b+1}/{n_read_blocks}: "
+                          f"rows {src_start:,}–{src_end:,}")
 
-    # flush all mmaps
-    for m in chunk_mmaps:
-        del m
+        # flush all mmaps
+        for m in chunk_mmaps:
+            del m
+    else:
+        print("  --gather-only: skipping scatter phase, using existing temp files.")
 
     # Phase 2: gather
     print(f"\nPhase 2 — Gather: writing {args.uce_out}...")
@@ -163,7 +170,7 @@ def shuffle_chunked(args, idx, n_rows, n_cols, dtype):
         for i, (tmp_path, cs) in enumerate(zip(tmp_paths, chunk_sizes_actual)):
             out_start = i * chunk_size
             out_end   = out_start + cs
-            chunk_data = np.load(tmp_path)
+            chunk_data = np.memmap(tmp_path, dtype=dtype, mode="r", shape=(cs, n_cols))
             ds_out[out_start:out_end] = chunk_data
             del chunk_data
             os.remove(tmp_path)
