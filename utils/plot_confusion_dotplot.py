@@ -33,6 +33,8 @@ parser.add_argument("--pred_col", required=True, help="Column name in prediction
 parser.add_argument("--out",      default="confusion_dotplot.png", help="Output image path")
 parser.add_argument("--min_frac", type=float, default=0.02,
                     help="Min fraction of a GT class to show a dot (default: 0.02)")
+parser.add_argument("--min_gt_cells", type=int, default=10,
+                    help="Min number of cells in a GT class to include it (default: 10)")
 parser.add_argument("--figsize",  nargs=2, type=float, default=None,
                     help="Figure size in inches (width height). Auto-sized if omitted.")
 parser.add_argument("--max_dot",  type=float, default=800,
@@ -50,6 +52,7 @@ assert len(gt) == len(pred), f"Row count mismatch: {len(gt)} vs {len(pred)}"
 
 # ── build confusion matrix (row-normalized by GT class) ───────────────────────
 gt_labels   = sorted(set(gt),   key=lambda x: -np.sum(gt == x))   # sort by freq
+gt_labels   = [g for g in gt_labels if np.sum(gt == g) >= args.min_gt_cells]
 pred_labels_all = sorted(set(pred), key=lambda x: -np.sum(pred == x))
 
 # only keep pred labels that appear above min_frac in at least one GT class
@@ -101,8 +104,10 @@ plt.colorbar(scatter, ax=ax, label="Fraction of GT class")
 
 ax.set_xticks(range(n_pred))
 ax.set_xticklabels(pred_order, rotation=60, ha="right", fontsize=14)
+gt_counts = {g: int(np.sum(gt == g)) for g in gt_labels}
+gt_tick_labels = [f"{g} (n={gt_counts[g]:,})" for g in gt_labels]
 ax.set_yticks(range(n_gt))
-ax.set_yticklabels(gt_labels, fontsize=14)
+ax.set_yticklabels(gt_tick_labels, fontsize=14)
 ax.set_xlabel("Predicted label", fontsize=15)
 ax.set_ylabel("Ground truth label", fontsize=15)
 

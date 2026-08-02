@@ -13,6 +13,7 @@ parser.add_argument("--config", required=True, metavar="JSON", help="transform c
 parser.add_argument("--out", default="newdata.arrow", help="output Arrow IPC file (default: newdata.arrow)")
 parser.add_argument("--title", help="title stored in Arrow schema metadata")
 parser.add_argument("--n-bins", type=int, default=10, help="bins for continuous features (default: 10)")
+parser.add_argument("--pin", nargs="+", metavar="COL", default=[], help="columns to always include and place at the top, bypassing null/cardinality filters")
 args = parser.parse_args()
 
 if (args.npy or args.h5) and not args.obs:
@@ -160,10 +161,14 @@ X_swapped = X_umap @ swap_xy_matrix
 # ── build column dict (same ordering as buildPyramidConfig.py) ────────────────
 
 pinned = next((c for c in CELL_LABEL_CANDIDATES if c in obs.columns), None)
+pinned_extra = [c for c in args.pin if c in obs.columns]
+for c in args.pin:
+    if c not in obs.columns:
+        print(f"  warning: --pin column '{c}' not found in obs, skipping")
 
 eligible = {}   # col -> feature_type
 for col in obs.columns:
-    if col in SKIP_COLS or col == pinned:
+    if col in SKIP_COLS or col == pinned or col in pinned_extra:
         continue
     feature_type, reason = classify_column(col, obs[col])
     if feature_type is not None:
@@ -176,12 +181,13 @@ if "sample_label" in eligible:
     ordered_cols.append("sample_label")
 if pinned:
     ordered_cols.append(pinned)
+ordered_cols += pinned_extra
 ordered_cols += sorted([c for c in eligible if c != "sample_label"])
 
 cat_cols = {}
 for col in ordered_cols:
-    series = obs[col] if col != pinned else obs[col]
-    feature_type = "category" if col == pinned else eligible.get(col, "category")
+    series = obs[col]
+    feature_type = "category" if (col == pinned or col in pinned_extra) else eligible.get(col, "category")
 
     if feature_type == "continuous":
         str_series, labels = bin_series(series, n_bins=args.n_bins)

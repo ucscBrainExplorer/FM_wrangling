@@ -197,6 +197,8 @@ def prescan_cell_count(data_dirs, embedding, select_datasets, ignore_datasets,
             arr = np.load(filepath, mmap_mode='r')
             n = arr.shape[0]
             obs_filepath = os.path.join(singleDir, dataset_id + "_obs.tsv")
+            if not os.path.exists(obs_filepath):
+                obs_filepath = os.path.join(singleDir, dataset_id + "_obs.tsv.gz")
             if os.path.exists(obs_filepath) and \
                dataset_id not in ucsc_datasets and \
                dataset_id not in cgCensus_non_primary_datasets:
@@ -301,7 +303,8 @@ for singleDir in data_dirs:
 
     for file in all_files:
         if not os.path.exists(os.path.join(singleDir, file)):
-            print(f"  WARNING: {file} not found in {singleDir}, skipping")
+            if singleDir != dup_dir:
+                print(f"  WARNING: {file} not found in {singleDir}, skipping")
             continue
         dataset_id = file.removesuffix("_uce.npy").removesuffix("_scimilarity.npy")
         match = re.match(r'^((?:ucsc-)?[a-f0-9\-]+)_', file)
@@ -317,6 +320,8 @@ for singleDir in data_dirs:
             uce_filepath = os.path.join(singleDir, file)
             uce  = np.load(uce_filepath)
             obs_filepath = os.path.join(singleDir, dataset_id+"_obs.tsv")
+            if not os.path.exists(obs_filepath):
+                obs_filepath = os.path.join(singleDir, dataset_id+"_obs.tsv.gz")
             obs = pd.read_csv(obs_filepath, sep='\t', low_memory=False)
 
             # If a UCSC remap file exists, merge mapped obs columns in as-is
@@ -463,9 +468,9 @@ with open(wrangling_notes_path, "w") as wf:
     wf.write("Add column 'collection_doi', populate with publication doi from source data\n")
     wf.write("Add column 'collection_doi_label', populate with publication doi label from source data\n")
     wf.write("Add column 'dataset_title', populate with dataset title from source data\n")
-    wf.write("UCSC remap (_remap.tsv + _obs_mapped.tsv.gz): mapped columns merged into obs as-is (no renaming)\n")
     wf.write(f"\nDatasets processed: {len(dataset_list)}\n")
     if remapfile_exist_datasets:
+        wf.write("UCSC remap (_remap.tsv + _obs_mapped.tsv.gz): mapped columns merged into obs as-is (no renaming)\n")
         wf.write(f"\nUCSC remap merged ({len(remapfile_exist_datasets)} datasets):\n")
         for real_ds_id, ds_id, mapped_fp, doc_fp in remapfile_exist_datasets:
             doi, title = _dataset_info(ds_id, ucsc_datasets, cxgInfo, ucscInfo)

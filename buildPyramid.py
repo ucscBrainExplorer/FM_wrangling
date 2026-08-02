@@ -29,6 +29,8 @@ parser.add_argument("--pyramid_file", required=True,
                     help="Pyramid config JSON filename inside results_dir (e.g. pyramid_e30_config.json)")
 parser.add_argument("--metadata_only", action="store_true",
                     help="Generate metadata.json without building pyramid tiles")
+parser.add_argument("--skip_top_levels", type=int, default=0,
+                    help="Number of highest-resolution levels to skip (default: 0 = save all)")
 args = parser.parse_args()
 
 results_dir  = args.results_dir
@@ -378,7 +380,7 @@ for feature, start_chn, viz_label, feature_type, n_bins in zip(
         current_base_area = 1
         block_size      = 2
         step            = 2.0
-        threshold_level = max_level
+        threshold_level = max_level - args.skip_top_levels + 1
         next_base_area  = current_base_area * block_size * block_size
         next_threshold  = init_density_threshold / step
         categories_size = len(cat_list) - 1
@@ -398,7 +400,7 @@ for feature, start_chn, viz_label, feature_type, n_bins in zip(
             next_base_area = next_base_area * block_size * block_size
             next_threshold = next_threshold / step
 
-        if threshold_level == max_level:
+        if args.skip_top_levels == 0:
             saveAsTiles(array_2d_cat, max_level, tilesize, depth_bit, start_chn, build_dir, target_dir)
 
     write_json(reference_name, viz_label, start_chn, cat_list, feature_type,
