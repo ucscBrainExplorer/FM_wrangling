@@ -21,6 +21,7 @@ import boto3
 from collections import defaultdict
 import h5py
 import warnings
+from numpy.lib.format import open_memmap
 
 #NRP bucket
 #bucket = "braingeneersdev"
@@ -235,14 +236,22 @@ def process_files_via_h5 (
     h5f.close()
     print(f"HDF5 written to: {embedding_path_h5}")
 
-    # --- Load back into NumPy and save as .npy ---
+    # --- Stream HDF5 -> disk-backed .npy in chunks (avoids materializing the
+    # full array in RAM, which OOMs for large datasets, e.g. ~46 GiB for
+    # ~9.7M cells x 1280 features) ---
     with h5py.File(embedding_path_h5, "r") as f:
-        if embedding == "uce":
-            embedding_array = f["uce"][:]
-        elif embedding == "scimilarity":
-            embedding_array = f["scimilarity"][:]
-            
-    np.save(embedding_path_npy, embedding_array)
+        dset_key = "uce" if embedding == "uce" else "scimilarity"
+        src = f[dset_key]
+        n_rows, n_features = src.shape
+        mmap_array = open_memmap(
+            embedding_path_npy, mode="w+", dtype="float32", shape=(n_rows, n_features)
+        )
+        chunk_rows = 200_000
+        for row_start in range(0, n_rows, chunk_rows):
+            row_end = min(row_start + chunk_rows, n_rows)
+            mmap_array[row_start:row_end] = src[row_start:row_end]
+        mmap_array.flush()
+        del mmap_array
     print(f"Saved final NumPy array: {embedding_path_npy}")
     print(f"Saved metadata TSV: {obs_path}")
 

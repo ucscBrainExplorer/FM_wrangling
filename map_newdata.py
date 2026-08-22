@@ -128,13 +128,15 @@ with open(args.config, "r") as f:
     config = json.load(f)
 
 config_dir = os.path.dirname(os.path.abspath(args.config))
-pca_model_file = os.path.join(config_dir, config["pca_model_file"])
+pca_model_file = config.get("pca_model_file")
 pumap_model_file = os.path.join(config_dir, config["pumap_model_file"])
 swap_xy_matrix = np.array(config["swap_xy_matrix"])
 d_hat_file = config.get("d_hat")
 W = np.load(os.path.join(config_dir, d_hat_file)).astype(np.float32) if d_hat_file else None
+if W is not None and W.ndim == 1:
+    W = W.reshape(1, -1)  # (X @ W.T) @ W needs W as (k, d), not a flat (d,) vector
 
-ipca = joblib.load(pca_model_file)
+ipca = joblib.load(os.path.join(config_dir, pca_model_file)) if pca_model_file else None
 pumap = umap_pytorch.load_pumap(pumap_model_file)
 
 if args.npy:
@@ -151,7 +153,7 @@ else:
 
 # ── project onto reference UMAP ───────────────────────────────────────────────
 
-X_pca = ipca.transform(uce).astype(np.float32)
+X_pca = ipca.transform(uce).astype(np.float32) if ipca is not None else uce.astype(np.float32)
 if W is not None:
     X_pca = X_pca - (X_pca @ W.T) @ W
 data_tensor = torch.from_numpy(X_pca)
