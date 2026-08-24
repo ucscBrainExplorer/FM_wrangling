@@ -57,26 +57,39 @@ embedding = args.embedding
 results_dir = args.results_dir
 nvme_dir = args.nvme_dir
 import shutil
-import ctypes, ctypes.util
+import mmap
 import numpy as np
 import pandas as pd
 import h5py
 
-# After reading a mmap chunk, tell the kernel it can reclaim those pages.
-# This keeps RSS flat when sequentially scanning a large read-only mmap.
-_libc = ctypes.CDLL(ctypes.util.find_library('c'), use_errno=True)
-_MADV_DONTNEED = 4
-_PAGE_SIZE = 4096
+# After reading a mmap chunk, tell the kernel it can reclaim those pages, keeping
+# RSS flat while sequentially scanning a large read-only mmap. Uses mmap.mmap's
+# native madvise() (stdlib since Python 3.8, Unix only) via numpy.memmap's
+# underlying mmap object (its private `._mmap` attribute — undocumented, but
+# stable across numpy versions in practice) instead of hand-rolled ctypes/libc
+# calls. This is purely an optimization hint to the OS, not a correctness
+# requirement, so any failure to apply it (non-Unix, an unexpected numpy
+# internal, etc.) is caught and downgrades to a one-time warning instead of
+# crashing the run.
+_PAGE_SIZE = mmap.PAGESIZE
+_madvise_available = True
 
-def _madvise_dontneed(arr, start_row, end_row):
-    stride    = arr.strides[0]
-    start_ptr = arr.ctypes.data + start_row * stride
-    end_ptr   = arr.ctypes.data + end_row   * stride
-    pg_start  = (start_ptr // _PAGE_SIZE) * _PAGE_SIZE
-    pg_end    = ((end_ptr + _PAGE_SIZE - 1) // _PAGE_SIZE) * _PAGE_SIZE
-    _libc.madvise(ctypes.c_void_p(pg_start),
-                  ctypes.c_size_t(pg_end - pg_start),
-                  ctypes.c_int(_MADV_DONTNEED))
+def _madvise_dontneed(memmap_arr, start_row, end_row):
+    global _madvise_available
+    if not _madvise_available:
+        return
+    try:
+        mm     = memmap_arr._mmap
+        stride = memmap_arr.strides[0]
+        start_byte = memmap_arr.offset + start_row * stride
+        end_byte   = memmap_arr.offset + end_row   * stride
+        pg_start = (start_byte // _PAGE_SIZE) * _PAGE_SIZE
+        pg_end   = -(-end_byte // _PAGE_SIZE) * _PAGE_SIZE
+        mm.madvise(mmap.MADV_DONTNEED, pg_start, pg_end - pg_start)
+    except (AttributeError, OSError) as e:
+        print(f"  WARNING: madvise(MADV_DONTNEED) unavailable ({e}); continuing "
+              f"without page-cache release (RSS may grow more than expected)")
+        _madvise_available = False
 
 
 def _zip_strict_chunks(uce_row_count, chunk_size, obs_reader, mapped_reader, dataset_id):
@@ -382,16 +395,25 @@ if len(select_datasets) > 0 and not uce_only:
             union_obs_cols.append(c)
     print(f"  Union obs schema: {len(union_obs_cols)} columns across {len(select_datasets)} select_datasets")
 
+# Fixed target obs column set, used for both output paths (TSV and shuffle's Parquet
+# staging) and both dataset-selection modes, so every chunk from every dataset ends
+# up with the identical column set — a dataset missing one of these gets it padded
+# with null rather than silently dropping the column (which would misalign a plain
+# TSV's header against later rows, or crash Parquet's schema-locked writer).
+if union_obs_cols is not None:
+    target_obs_cols = union_obs_cols          # select_datasets mode: union of actual headers
+else:
+    target_obs_cols = select_cols + ['collection_doi', 'collection_doi_label', 'dataset_title']
+
 # Pre-declare parquet schema for shuffle mode so every chunk uses the same types.
 # new_index is reset into a regular column before each write, so include it here.
 # All columns declared as string to avoid dtype inference differences across chunks
 # (e.g. reindex fills missing cols with np.nan which PyArrow infers as double).
 _pq_schema_arrow = None
 if shuffle and not uce_only:
-    if union_obs_cols is not None:
-        _pq_schema_arrow = pa.schema(
-            [('new_index', pa.string())] + [(col, pa.string()) for col in union_obs_cols]
-        )
+    _pq_schema_arrow = pa.schema(
+        [('new_index', pa.string())] + [(col, pa.string()) for col in target_obs_cols]
+    )
 
 for singleDir in data_dirs:
     # When select_datasets is provided, iterate in its order to guarantee deterministic row ordering.
@@ -515,27 +537,25 @@ for singleDir in data_dirs:
                     obs_filtered.rename(columns={"Unnamed: 0": "old_index"}, inplace=True)
                     obs_filtered.set_index('new_index', inplace=True)
                     obs_filtered = obs_filtered.assign(dataset_id=real_dataset_id)
-                    if len(select_datasets) == 0:
-                        cols_to_use = [c for c in select_cols if c in obs_filtered.columns]
-                        obs_filtered = obs_filtered[cols_to_use]
                     obs_filtered["collection_doi"]       = _doi
                     obs_filtered["collection_doi_label"] = _doi_label
                     obs_filtered["dataset_title"]        = _title
-                    if union_obs_cols is not None:
-                        obs_filtered = obs_filtered.reindex(columns=union_obs_cols)
+                    # Pad/select onto the fixed target column set (see target_obs_cols
+                    # above) so every dataset's chunks share the same columns, whether
+                    # or not this particular dataset's obs.tsv has all of them.
+                    obs_filtered = obs_filtered.reindex(columns=target_obs_cols)
                     if shuffle:
                         # Reset index so new_index becomes a regular column in the parquet.
                         # Using an explicit all-string schema avoids dtype inference issues:
                         # reindex fills missing cols with np.nan which PyArrow otherwise
                         # infers as double instead of string, causing schema mismatches.
+                        # _pq_schema_arrow is always set here: it's built unconditionally
+                        # whenever shuffle and not uce_only (see above), which is exactly
+                        # this branch's own condition.
                         obs_for_pq = obs_filtered.reset_index()
-                        if _pq_schema_arrow is not None:
-                            table = pa.Table.from_pandas(obs_for_pq,
-                                                         schema=_pq_schema_arrow,
-                                                         preserve_index=False)
-                        else:
-                            table = pa.Table.from_pandas(obs_for_pq,
-                                                         preserve_index=False)
+                        table = pa.Table.from_pandas(obs_for_pq,
+                                                     schema=_pq_schema_arrow,
+                                                     preserve_index=False)
                         if _pq_writer is None:
                             _pq_writer = pq.ParquetWriter(_obs_tmp, table.schema)
                         _pq_writer.write_table(table)
