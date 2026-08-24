@@ -339,6 +339,21 @@ if not obs_only:
         prescan_total = prescan_cell_count(data_dirs, embedding, select_datasets, ignore_datasets,
                                            ucsc_datasets, cgCensus_non_primary_datasets)
         print(f"  Pre-scan estimate: {prescan_total} cells")
+        if prescan_total == 0:
+            # Fail fast here instead of running the full pipeline (Discovery API fetch,
+            # an empty shuffle, an empty uce.h5 write) only to crash confusingly at the
+            # very end trying to read a Parquet obs file that was never written because
+            # there was nothing to write. 0 cells almost always means a dataset_id in
+            # --select-datasets-file doesn't match any actual "<id>_{embedding}.npy"
+            # filename (e.g. a missing "_AIT" suffix) — check that first.
+            print(f"ERROR: pre-scan found 0 cells - nothing would be written. Aborting.")
+            if len(select_datasets) > 0:
+                print(f"  select_datasets ({len(select_datasets)}): {select_datasets}")
+                print(f"  Check each id matches an actual '<id>_{embedding}.npy' file "
+                     f"in one of: {data_dirs}")
+            else:
+                print(f"  No .npy files matched in {data_dirs} after ignore_datasets filtering")
+            sys.exit(1)
         nvme_tmp = os.path.join(nvme_dir, f"{embedding}_shuffle_{os.path.basename(os.path.normpath(results_dir))}.dat")
         print(f"  Creating NVMe memmap: {nvme_tmp}")
         uce_mmap = np.memmap(nvme_tmp, dtype=arr_dtype, mode='w+', shape=(prescan_total, n_cols))
