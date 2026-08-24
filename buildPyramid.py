@@ -314,7 +314,20 @@ os.makedirs(target_dir, exist_ok=True)
 # ── Load data ─────────────────────────────────────────────────────────────────
 
 print(f"Reading {metadata_file} ...")
-data = pd.read_csv(os.path.join(results_dir, metadata_file), sep="\t", low_memory=False)
+# Only `features` columns are ever read from `data` (see findCodes/binContinuous below).
+# low_memory=False on the full obs file buffers every column (not just these) while
+# sniffing dtypes, which can blow up memory on a large obs file. Instead sniff dtypes
+# from a cheap sample restricted to the needed columns, then do a single-pass typed
+# read. Widen sampled ints to float64 in case a NaN shows up outside the sample.
+metadata_path = os.path.join(results_dir, metadata_file)
+usecols = sorted(set(features))
+sample = pd.read_csv(metadata_path, sep="\t", usecols=usecols, nrows=200_000)
+dtype_map = {
+    c: ("float64" if pd.api.types.is_integer_dtype(sample[c]) else sample[c].dtype)
+    for c in sample.columns
+}
+del sample
+data = pd.read_csv(metadata_path, sep="\t", usecols=usecols, dtype=dtype_map)
 
 print(f"Loading UMAP {umap_file} ...")
 UMAP = np.load(os.path.join(results_dir, umap_file))

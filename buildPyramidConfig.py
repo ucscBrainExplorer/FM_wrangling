@@ -35,19 +35,67 @@ parser.add_argument("--out", default=None,
                     help="Output JSON path (default: <results_dir>/pyramid_e{N}_config.json)")
 parser.add_argument("--pinned", default=None,
                     help="Column to pin as the primary cell label (overrides CELL_LABEL_CANDIDATES)")
+parser.add_argument("--columns", default=None,
+                    help="Comma-separated list of columns to restrict the build to "
+                         "(for a partial/first-run config). All other columns are ignored "
+                         "regardless of HIGH_PRIORITY/eligibility. --pinned label is kept "
+                         "even if omitted from this list.")
 args = parser.parse_args()
 
 obs_path = os.path.join(args.results_dir, args.metadata_file)
 
-# Validate --pinned before paying the cost of loading the full file
-if args.pinned:
+# Validate --pinned/--columns before paying the cost of loading the full file
+header_cols = None
+if args.pinned or args.columns:
     header_cols = pd.read_csv(obs_path, sep='\t', nrows=0).columns.tolist()
-    if args.pinned not in header_cols:
-        raise ValueError(f"--pinned column '{args.pinned}' not found in {obs_path}\n"
+
+if args.pinned and args.pinned not in header_cols:
+    raise ValueError(f"--pinned column '{args.pinned}' not found in {obs_path}\n"
+                     f"Available columns: {header_cols}")
+
+restrict_cols = None
+if args.columns:
+    restrict_cols = [c.strip() for c in args.columns.split(",") if c.strip()]
+    missing = [c for c in restrict_cols if c not in header_cols]
+    if missing:
+        raise ValueError(f"--columns entries not found in {obs_path}: {missing}\n"
                          f"Available columns: {header_cols}")
 
+# Candidate columns for auto-pinning the primary cell label, if --pinned isn't given
+CELL_LABEL_CANDIDATES = [
+    "harmonized_cell_label", "custom_cell_type", "cell_type", "celltype",
+    "cell_type_annotation", "author_cell_type",
+]
+
+# When --columns restricts the build, only read those columns off disk (plus the
+# pinned label / label candidates, so auto-pinning still works) instead of the
+# full file — a 70-column obs file can otherwise blow up memory for no reason.
+usecols = None
+if restrict_cols is not None:
+    keep = set(restrict_cols)
+    if args.pinned:
+        keep.add(args.pinned)
+    else:
+        keep.update(c for c in CELL_LABEL_CANDIDATES if c in header_cols)
+    usecols = [c for c in header_cols if c in keep]
+
 print(f"Reading {obs_path} ...")
-obs = pd.read_csv(obs_path, sep='\t', low_memory=False)
+if usecols is not None:
+    print(f"  (restricted to {len(usecols)} columns: {usecols})")
+
+# low_memory=False buffers the whole column set in memory to sniff dtypes, which
+# is wasteful on a large obs file — usecols alone doesn't avoid it, since dtype
+# sniffing happens before columns are dropped. Instead sniff dtypes from a cheap
+# sample, then do a single-pass typed read of just the needed columns (or all of
+# them, if --columns wasn't given). Widen sampled ints to float64 in case a NaN
+# shows up outside the sample (int dtype can't hold NaN).
+sample = pd.read_csv(obs_path, sep='\t', usecols=usecols, nrows=200_000)
+dtype_map = {
+    c: ("float64" if pd.api.types.is_integer_dtype(sample[c]) else sample[c].dtype)
+    for c in sample.columns
+}
+del sample
+obs = pd.read_csv(obs_path, sep='\t', usecols=usecols, dtype=dtype_map)
 
 # Columns to always skip — IDs, QC numerics, ontology term IDs
 SKIP_COLS = {
@@ -99,7 +147,7 @@ def classify_column(col, series):
     is_numeric = np.issubdtype(series.dtype, np.number)
     feature_type = "continuous" if (is_numeric and n_unique > 20 and col.lower() not in FORCE_CATEGORY) else "category"
 
-    if col in HIGH_PRIORITY:
+    if col in HIGH_PRIORITY or (restrict_cols is not None and col in restrict_cols):
         return feature_type, None
 
     if null_rate > 0.5:
@@ -112,11 +160,7 @@ def classify_column(col, series):
 
     return feature_type, None
 
-# Determine the top cell label column to pin first
-CELL_LABEL_CANDIDATES = [
-    "harmonized_cell_label", "custom_cell_type", "cell_type", "celltype",
-    "cell_type_annotation", "author_cell_type",
-]
+# Determine the top cell label column to pin first (CELL_LABEL_CANDIDATES defined above)
 if args.pinned:
     pinned = args.pinned
 else:
@@ -126,7 +170,8 @@ else:
 eligible = {}   # col -> feature_type
 rejected = []
 
-for col in obs.columns:
+candidate_cols = obs.columns if restrict_cols is None else restrict_cols
+for col in candidate_cols:
     if col in SKIP_COLS or col == pinned or col.endswith("_term_id"):
         continue
     feature_type, reason = classify_column(col, obs[col])
