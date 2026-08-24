@@ -177,6 +177,8 @@ for check_dir in set(data_dirs + [dup_dir]):
         sys.exit(1)
 
 dataset_list = []
+dataset_collection_info = []              # (real_dataset_id, collection_doi, collection_doi_label, dataset_title)
+                                          #   for the wrangling notes — actual values, not a generic description
 cellCount = 0
 remapfile_exist_datasets = []             # (real_dataset_id, dataset_id, mapped_filepath, doc_filepath)
                                           #   remap file (_remap.tsv + _obs_mapped.tsv.gz) found — UCSC mapped obs merged in as-is
@@ -495,6 +497,7 @@ for singleDir in data_dirs:
                     _doi       = ucscInfo.at[dataset_id, "collection_doi"]
                     _doi_label = ucscInfo.at[dataset_id, "collection_doi_label"]
                     _title     = ucscInfo.at[dataset_id, "dataset_title"]
+                dataset_collection_info.append((real_dataset_id, _doi, _doi_label, _title))
 
             # dtype=str forces string typing without disabling NA detection: pandas
             # still substitutes NaN for cells matching its default NA tokens ('',
@@ -649,9 +652,14 @@ with open(wrangling_notes_path, "w") as wf:
     wf.write(f"results_dir: {results_dir}\n")
     wf.write("\n")
     wf.write("Combine .obs fields from source embedding files\n")
-    wf.write("Add column 'collection_doi', populate with publication doi from source data\n")
-    wf.write("Add column 'collection_doi_label', populate with publication doi label from source data\n")
-    wf.write("Add column 'dataset_title', populate with dataset title from source data\n")
+    wf.write("Added columns 'collection_doi', 'collection_doi_label', 'dataset_title' per dataset:\n")
+    def _fmt(v):
+        return "(none)" if (isinstance(v, float) and np.isnan(v)) or v == "" else str(v)
+    for real_ds_id, doi, doi_label, title in dataset_collection_info:
+        wf.write(f"  {real_ds_id}\n")
+        wf.write(f"    collection_doi:       {_fmt(doi)}\n")
+        wf.write(f"    collection_doi_label: {_fmt(doi_label)}\n")
+        wf.write(f"    dataset_title:        {_fmt(title)}\n")
     wf.write(f"\nDatasets processed: {len(dataset_list)}\n")
     if remapfile_exist_datasets:
         wf.write("UCSC remap (_remap.tsv + _obs_mapped.tsv.gz): mapped columns merged into obs as-is (no renaming)\n")
