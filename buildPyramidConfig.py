@@ -139,10 +139,40 @@ HIGH_PRIORITY = {
 
 FORCE_CATEGORY = {"cluster"}
 
+# When obs spans multiple collections/datasets with disjoint metadata schemas
+# (e.g. two studies concatenated into one obs table, each contributing its own
+# annotation columns), a column that's fully populated within its own study
+# still looks globally "mostly null" once the other study's cells — which
+# never had that field — are counted too. Check null rate per collection
+# instead of globally, so we don't drop one study's real metadata just
+# because a larger co-mingled study doesn't carry that field at all.
+GROUP_COL = next((c for c in ("dataset_id", "collection_doi_label") if c in obs.columns), None)
+MIN_GROUP_SIZE = max(50, int(0.01 * len(obs)))  # ignore tiny/noise groups
+
+group_sizes = None
+if GROUP_COL is not None:
+    group_sizes = obs[GROUP_COL].value_counts()
+    if (group_sizes >= MIN_GROUP_SIZE).sum() > 1:
+        print(f"Detected {(group_sizes >= MIN_GROUP_SIZE).sum()} collections via "
+              f"'{GROUP_COL}' — using per-collection null-rate check")
+    else:
+        GROUP_COL = None  # only one real group, no benefit to grouping
+
 def classify_column(col, series):
     """Returns (feature_type, reject_reason) — reject_reason is None if eligible."""
     n_total = len(series)
     null_rate = series.isnull().sum() / n_total
+
+    if GROUP_COL is not None and col != GROUP_COL:
+        # Best-case null rate among sizeable collections — a column fully
+        # populated within its own collection shouldn't be rejected just
+        # because other collections don't carry that field at all.
+        valid_groups = group_sizes[group_sizes >= MIN_GROUP_SIZE].index
+        per_group_null = series.groupby(obs[GROUP_COL]).apply(lambda s: s.isnull().mean())
+        per_group_null = per_group_null.reindex(valid_groups).dropna()
+        if len(per_group_null):
+            null_rate = min(null_rate, per_group_null.min())
+
     n_unique = series.nunique()
     is_numeric = np.issubdtype(series.dtype, np.number)
     feature_type = "continuous" if (is_numeric and n_unique > 20 and col.lower() not in FORCE_CATEGORY) else "category"
@@ -151,7 +181,8 @@ def classify_column(col, series):
         return feature_type, None
 
     if null_rate > 0.5:
-        return None, f"{null_rate:.0%} null"
+        global_null_rate = series.isnull().sum() / n_total
+        return None, f"{global_null_rate:.0%} null"
 
     is_cell_label = any(k in col.lower() for k in
                         ["cell_type", "celltype", "annotation", "author_label"])
