@@ -376,7 +376,7 @@ for feature, start_chn, viz_label, feature_type, n_bins in zip(
 
         # density threshold lookup
         init_density_threshold = {
-            4: 1.0 / 2.0,
+            4: 1.0 / 4.0,
             5: 1.0 / 4.0,
             6: 1.0 / 4.0,
             7: 1.0 / (4.0 * 2.0),
