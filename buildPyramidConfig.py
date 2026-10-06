@@ -112,7 +112,6 @@ SKIP_COLS = {
     "harmonized_cell_label_ontology_term_match_method",
     "singler_celltype_ontology", "scimilarity_celltype_ontology",
     "consensus_celltype_ontology", "collection_doi",
-    "n_genes",
     "x", "y",
     "x_ccf", "y_ccf", "z_ccf",
     "x_section", "y_section", "z_section",
