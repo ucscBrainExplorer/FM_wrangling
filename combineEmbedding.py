@@ -61,6 +61,7 @@ import mmap
 import numpy as np
 import pandas as pd
 import h5py
+from obs_shuffle import write_shuffled_obs   # FM_wrangling/obs_shuffle.py (script dir is on sys.path)
 
 # After reading a mmap chunk, tell the kernel it can reclaim those pages, keeping
 # RSS flat while sequentially scanning a large read-only mmap. Uses mmap.mmap's
@@ -118,6 +119,7 @@ def _zip_strict_chunks(uce_row_count, chunk_size, obs_reader, mapped_reader, dat
             )
         yield uce_start, obs_chunk, mapped_chunk
 
+
 obs_only = args.obs_only
 uce_only = args.uce_only
 
@@ -146,6 +148,7 @@ obs_outfile = "obs.tsv.gz"
 ucsc_file = "datasetLists/ucsc_datasets.txt"
 cgCensus_non_primary_file ="datasetLists/cgCensus_non_primary_datasets.txt"
 ignore_file = "datasetLists/ignore_datasets.txt"
+manual_column_file = "datasetLists/manual_column.json"
 
 if os.path.isdir(dup_dir):
     with open(ignore_file) as f:
@@ -422,6 +425,36 @@ if union_obs_cols is not None:
 else:
     target_obs_cols = select_cols + ['collection_doi', 'collection_doi_label', 'dataset_title']
 
+# manual_column.json overrides (full run only). In select_datasets mode these are
+# applied later by 0_annotate_obs.ipynb, which needs the source columns that the
+# full run's fixed target_obs_cols would drop — so in a full run they are applied
+# here instead, per chunk before the reindex, while each dataset's own columns
+# (e.g. supercluster_term, Group) are still present.
+#   {"<dataset_id>": {"<target col>": {"type": "static"|"column", "value": ...}, ...}}
+# Non-dict entries (collection_doi_label, dataset_title) are informational only.
+manual_rules = {}                         # real_dataset_id -> [(target, type, value)]
+manual_rule_notes = []                    # lines for the wrangling notes
+if union_obs_cols is None and not uce_only:
+    import json
+    with open(manual_column_file) as f:
+        for ds_id, cfg in json.load(f).items():
+            for target, rule in cfg.items():
+                if not isinstance(rule, dict):
+                    continue
+                if rule.get("type") not in ("static", "column") or "value" not in rule:
+                    print(f"ERROR: {manual_column_file}: {ds_id}.{target} needs \"type\": "
+                          f"\"static\"|\"column\" and a \"value\" (got {rule!r})")
+                    sys.exit(1)
+                if target not in target_obs_cols:
+                    # would be dropped by the reindex anyway
+                    print(f"  WARNING: {manual_column_file}: {ds_id}.{target} is not a full-run obs "
+                          f"column; rule ignored")
+                    continue
+                # str(): obs is all-string; a JSON number would break the shuffle
+                # path's all-string Parquet schema
+                manual_rules.setdefault(ds_id, []).append((target, rule["type"], str(rule["value"])))
+    print(f"  manual_column.json: {sum(map(len, manual_rules.values()))} rules for {len(manual_rules)} datasets")
+
 # Pre-declare parquet schema for shuffle mode so every chunk uses the same types.
 # new_index is reset into a regular column before each write, so include it here.
 # All columns declared as string to avoid dtype inference differences across chunks
@@ -434,7 +467,11 @@ if shuffle and not uce_only:
 
 for singleDir in data_dirs:
     # When select_datasets is provided, iterate in its order to guarantee deterministic row ordering.
-    # When combining all datasets, walk the filesystem (order is non-deterministic — use --shuffle for randomization).
+    # When combining all datasets, walk the filesystem in sorted filename order. This
+    # order is deterministic given the same files and dataset lists, which is what lets
+    # apply_shuffle_index.py re-apply a saved shuffle_index.uce.npy to an --obs-only rerun.
+    if not os.path.isdir(singleDir):
+        continue
     if len(select_datasets) > 0:
         all_files = [f"{ds_id}_{embedding}.npy" for ds_id in select_datasets]
     else:
@@ -463,13 +500,17 @@ for singleDir in data_dirs:
             if not os.path.exists(obs_filepath):
                 obs_filepath = os.path.join(singleDir, dataset_id + "_obs.tsv.gz")
 
-            # remap: detect new columns and set up a chunked reader aligned with obs/uce
+            # remap: detect new columns and set up a chunked reader aligned with obs/uce.
+            # Only in select_datasets mode (union_obs_cols set): a full run reindexes
+            # obs onto the fixed select_cols set, which would drop the remap columns
+            # anyway, so they are neither read nor reported as merged.
             remap_filepath  = os.path.join(singleDir, dataset_id + "_remap.tsv")
             mapped_filepath = os.path.join(singleDir, dataset_id + "_obs_mapped.tsv.gz")
             doc_filepath    = os.path.join(singleDir, dataset_id + "_obs_mapped_doc.txt")
             if not os.path.exists(doc_filepath):
                 doc_filepath = os.path.join(singleDir, dataset_id + ".report.md")
-            has_remap = (os.path.exists(remap_filepath) and
+            has_remap = (union_obs_cols is not None and
+                         os.path.exists(remap_filepath) and
                          os.path.exists(mapped_filepath) and
                          os.path.exists(doc_filepath))
             mapped_reader  = None
@@ -513,6 +554,24 @@ for singleDir in data_dirs:
                     _doi_label = ucscInfo.at[dataset_id, "collection_doi_label"]
                     _title     = ucscInfo.at[dataset_id, "dataset_title"]
                 dataset_collection_info.append((real_dataset_id, _doi, _doi_label, _title))
+
+            # resolve this dataset's manual_column.json rules against its obs header;
+            # a "column" rule whose source column is missing is skipped with a warning
+            ds_rules = []
+            if real_dataset_id in manual_rules:
+                _hdr = set(pd.read_csv(obs_filepath, sep='\t', nrows=0).columns)
+                for target, rtype, value in manual_rules[real_dataset_id]:
+                    if rtype == "column" and value not in _hdr:
+                        note = (f"SKIPPED map column '{value}' -> '{target}' for dataset "
+                                f"'{real_dataset_id}' '{_doi_label}' '{_title}': source column not in obs")
+                        print(f"  WARNING: {note}")
+                    else:
+                        ds_rules.append((target, rtype, value))
+                        note = (f"Set '{target}' = '{value}'" if rtype == "static"
+                                else f"Map column '{value}' -> '{target}'")
+                        note += f" for dataset '{real_dataset_id}' '{_doi_label}' '{_title}'"
+                        print(f"  {note}")
+                    manual_rule_notes.append(note)
 
             # dtype=str forces string typing without disabling NA detection: pandas
             # still substitutes NaN for cells matching its default NA tokens ('',
@@ -558,6 +617,9 @@ for singleDir in data_dirs:
                     obs_filtered["collection_doi"]       = _doi
                     obs_filtered["collection_doi_label"] = _doi_label
                     obs_filtered["dataset_title"]        = _title
+                    # manual_column.json overrides (full run only, see manual_rules)
+                    for target, rtype, value in ds_rules:
+                        obs_filtered[target] = value if rtype == "static" else obs_filtered[value]
                     # Pad/select onto the fixed target column set (see target_obs_cols
                     # above) so every dataset's chunks share the same columns, whether
                     # or not this particular dataset's obs.tsv has all of them.
@@ -627,14 +689,12 @@ if not uce_only:
     if shuffle:
         if _pq_writer is not None:
             _pq_writer.close()
-        print("Reading obs parquet for shuffle reorder...")
-        combined_obs = pd.read_parquet(_obs_tmp)
-        print("Shuffling obs...")
-        combined_obs = combined_obs.iloc[shuffle_idx].reset_index(drop=True)
-        if 'new_index' in combined_obs.columns:
-            combined_obs = combined_obs.set_index('new_index')
-        combined_obs.to_csv(obs_outpath, sep='\t', compression='gzip')
+        print("Writing shuffled obs in chunks (NVMe staging)...")
+        _obs_shuf_nvme_tmp = os.path.join(nvme_dir, f"obs_{os.path.basename(os.path.normpath(results_dir))}.tsv.gz")
+        write_shuffled_obs(_obs_tmp, shuffle_idx, _obs_shuf_nvme_tmp)
         os.remove(_obs_tmp)
+        print(f"Moving obs NVMe -> EFS: {_obs_shuf_nvme_tmp} -> {obs_outpath}")
+        shutil.move(_obs_shuf_nvme_tmp, obs_outpath)
     else:
         _obs_out.close()
         print(f"Moving obs NVMe -> EFS: {_obs_nvme_tmp} -> {obs_outpath}")
@@ -676,6 +736,11 @@ with open(wrangling_notes_path, "w") as wf:
         wf.write(f"    collection_doi_label: {_fmt(doi_label)}\n")
         wf.write(f"    dataset_title:        {_fmt(title)}\n")
     wf.write(f"\nDatasets processed: {len(dataset_list)}\n")
+    if manual_rule_notes:
+        wf.write(f"\nmanual_column.json overrides applied in combine (full run; "
+                 f"{manual_column_file}):\n")
+        for note in manual_rule_notes:
+            wf.write(f"  {note}\n")
     if remapfile_exist_datasets:
         wf.write("UCSC remap (_remap.tsv + _obs_mapped.tsv.gz): mapped columns merged into obs as-is (no renaming)\n")
         wf.write(f"\nUCSC remap merged ({len(remapfile_exist_datasets)} datasets):\n")

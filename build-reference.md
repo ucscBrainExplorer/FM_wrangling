@@ -44,15 +44,15 @@ On startup the script validates that:
 If only one dataset needs to be shuffled (no combine step needed):
 
 ```bash
-python3 FM_wrangling/utils/shuffle.py \
+/usr/bin/python3.11 FM_wrangling/utils/shuffle.py \
     --uce-in UCE_npy_obs/<dataset_id>_uce.npy \
     --obs-in UCE_npy_obs/<dataset_id>_obs.tsv \
-    --uce-out <ATLAS_DIR>/uce.h5 \
-    --obs-out <ATLAS_DIR>/obs.tsv.gz \
-    --idx-out <ATLAS_DIR>/shuffle_index.npy
+    --out-dir <ATLAS_DIR>
 ```
 
-Use `--chunked` if RAM is constrained (~2× chunk size needed instead of 2× full array). Note: `--chunked` requires `.h5` input.
+Writes `<ATLAS_DIR>/uce.h5` (uncompressed), `obs.tsv.gz` and `shuffle_index.npy`. Obs is staged as Parquet in `--nvme-dir` (default `/nvme`) and values are kept verbatim.
+
+Use `--chunked` if RAM is constrained: RAM drops to ~32 bytes/row plus one read block, but `--nvme-dir` needs free space equal to the full uncompressed array. `--chunked` requires `.h5` input; if the source h5 has tiny chunks (e.g. `combined_UCE_56M/uce.h5`), copy it to `/nvme` first and shuffle the copy.
 
 ## Step 2 — PCA and KNN (run in parallel)
 
