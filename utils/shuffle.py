@@ -13,6 +13,9 @@ Modes:
               NVMe: temp files totalling the full uncompressed array
               (e.g. 56.66M × 1280 float32 → 227 files, ~290 GB).
               Only supported for .h5 input.
+              If --out-dir is on the same disk as --nvme-dir, the output needs a second
+              full copy's worth of space; --delete-temp-as-gathered drops each temp file
+              once it is copied, so temp + output never exceed one copy.
 
 Input layout matters: an h5 stored in tiny chunks (e.g. the 56M uce.h5, 64×80) turns
 the sequential read into millions of small reads, very slow over EFS/NFS. Copy it to
@@ -65,6 +68,11 @@ def parse_args():
                         help="Skip Phase 1 (scatter) and go straight to Phase 2 (gather). "
                              "Use when chunk temp files already exist on --nvme-dir; reuses the "
                              "existing <out-dir>/shuffle_index.npy instead of drawing a new one.")
+    parser.add_argument("--delete-temp-as-gathered", action="store_true", default=False,
+                        help="Delete each temp chunk file as soon as it is copied into the output, so "
+                             "temp + output never exceed one copy of the data. Needed when --out-dir is "
+                             "on the same disk as --nvme-dir and space is short. An interrupted gather "
+                             "can then NOT be resumed with --gather-only; rerun from scratch.")
     return parser.parse_args()
 
 
@@ -135,8 +143,14 @@ def shuffle_chunked(args, idx, n_rows, n_cols, dtype):
 
     if not args.gather_only:
         free_gb = psutil.disk_usage(nvme_dir).free / 1024**3
-        if temp_gb > free_gb:
-            sys.exit(f"ERROR: temp files need {temp_gb:.1f} GB but {nvme_dir} has {free_gb:.1f} GB free")
+        # the output is written sparsely as chunks are gathered; on the same disk it
+        # needs its own full copy unless temp files are deleted as they are consumed
+        same_disk = os.stat(nvme_dir).st_dev == os.stat(args.out_dir).st_dev
+        need_gb = temp_gb * (2 if same_disk and not args.delete_temp_as_gathered else 1)
+        if need_gb > free_gb:
+            hint = " (add --delete-temp-as-gathered)" if same_disk and not args.delete_temp_as_gathered else ""
+            sys.exit(f"ERROR: temp files{' + output' if need_gb > temp_gb else ''} need {need_gb:.1f} GB "
+                     f"but {nvme_dir} has {free_gb:.1f} GB free{hint}")
 
         # inv_idx[src_row] = output position of that source row
         print("Building inverse shuffle index...")
@@ -191,12 +205,15 @@ def shuffle_chunked(args, idx, n_rows, n_cols, dtype):
             chunk_data = np.memmap(tmp_path, dtype=dtype, mode="r", shape=(cs, n_cols))
             ds_out[out_start:out_end] = chunk_data
             del chunk_data
+            if args.delete_temp_as_gathered:
+                os.remove(tmp_path)
             print(f"  chunk {i+1}/{n_chunks}: output rows {out_start:,}–{out_end:,}", flush=True)
 
-    # remove temp files only once the output is fully written and closed, so an
-    # interrupted gather can be resumed with --gather-only
-    for tmp_path in tmp_paths:
-        os.remove(tmp_path)
+    # by default, remove temp files only once the output is fully written and closed,
+    # so an interrupted gather can be resumed with --gather-only
+    if not args.delete_temp_as_gathered:
+        for tmp_path in tmp_paths:
+            os.remove(tmp_path)
     print("Scatter-gather complete.")
 
 
