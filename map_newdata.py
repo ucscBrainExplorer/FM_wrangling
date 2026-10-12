@@ -13,6 +13,7 @@ parser.add_argument("--config", required=True, metavar="JSON", help="transform c
 parser.add_argument("--out", default="newdata.arrow", help="output Arrow IPC file (default: newdata.arrow)")
 parser.add_argument("--title", help="title stored in Arrow schema metadata")
 parser.add_argument("--n-bins", type=int, default=10, help="bins for continuous features (default: 10)")
+parser.add_argument("--ref-metadata", metavar="JSON", help="reference pyramid metadata.json; category columns it shares are encoded with the reference's category order so overlay colors match")
 parser.add_argument("--pin", nargs="+", metavar="COL", default=[], help="columns to always include and place at the top, bypassing null/cardinality filters")
 args = parser.parse_args()
 
@@ -151,6 +152,17 @@ else:
     uce = adata.obsm["X_uce"]
     obs = pd.read_csv(args.obs, sep="\t", index_col=0) if args.obs else adata.obs
 
+# Reference category order. The viewer reserves code 0 for "background" in the
+# reference and starts coloring at 1, while overlay codes start at 0 — so the
+# overlay dictionary is the reference list minus "background".
+ref_cats = {}
+if args.ref_metadata:
+    with open(args.ref_metadata) as f:
+        for p in json.load(f)["phenotypes"]:
+            if p.get("type") == "category":
+                cats = p["int_to_category"]
+                ref_cats[p["name"]] = cats[1:] if cats and cats[0] == "background" else cats
+
 # ── project onto reference UMAP ───────────────────────────────────────────────
 
 X_pca = ipca.transform(uce).astype(np.float32) if ipca is not None else uce.astype(np.float32)
@@ -197,8 +209,24 @@ for col in ordered_cols:
         print(f"  continuous {col}: {len(labels)} bins")
     else:
         str_series = series.astype(str)
-        cat_cols[col] = pa.array(str_series.astype("category"))
-        print(f"  category   {col}: {series.nunique()} unique")
+        if col in ref_cats:
+            cats = ref_cats[col]
+            present = set(str_series)
+            extra = sorted(present - set(cats))   # labels absent from the reference go last
+            # The viewer fails on zero-count categories. Trailing unused reference labels
+            # can be dropped without shifting codes; mid-list ones cannot.
+            while cats and cats[-1] not in present:
+                cats = cats[:-1]
+            unused = [c for c in cats if c not in present]
+            if unused:
+                print(f"  WARNING {col}: reference labels with 0 cells kept to preserve codes "
+                      f"(viewer may fail to display): {unused}")
+            cat_cols[col] = pa.array(pd.Categorical(str_series, categories=cats + extra))
+            print(f"  category   {col}: {series.nunique()} unique, reference order"
+                  + (f", extra {extra}" if extra else ""))
+        else:
+            cat_cols[col] = pa.array(str_series.astype("category"))
+            print(f"  category   {col}: {series.nunique()} unique")
 
 # ── write arrow file ──────────────────────────────────────────────────────────
 

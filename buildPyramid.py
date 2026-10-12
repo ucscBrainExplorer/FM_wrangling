@@ -80,16 +80,26 @@ def UMAP_loss_rate(arr1_size, UMAP):
     return loss_rate
 
 
-def findCodes(data, feature):
-    from sklearn.preprocessing import LabelEncoder
-    categories = data[feature].to_numpy()
+def findCodes(data, feature, order="alphabetical"):
     print(feature)
-    le = LabelEncoder()
-    mask = ~pd.isna(categories)
-    categories_int = np.zeros_like(categories, dtype=int)
-    categories_int[mask] = le.fit_transform(categories[mask]) + 1
-    cat_list = ["background"] + [str(int(c)) if isinstance(c, float) and c.is_integer() else str(c) for c in le.classes_]
-    print(f"  {len(le.classes_)} categories")
+    if order == "frequency":
+        # The viewer cycles a small palette over the codes, so categories whose
+        # codes differ by a multiple of the palette size share a color. Coding by
+        # descending cell count gives the largest categories the first codes,
+        # which are distinct colors whatever the palette size is.
+        counts = data[feature].value_counts()
+        classes = sorted(counts.index, key=lambda c: (-counts[c], str(c)))
+        categories_int = pd.Categorical(data[feature], categories=classes).codes.astype(int) + 1
+    else:
+        from sklearn.preprocessing import LabelEncoder
+        categories = data[feature].to_numpy()
+        le = LabelEncoder()
+        mask = ~pd.isna(categories)
+        categories_int = np.zeros_like(categories, dtype=int)
+        categories_int[mask] = le.fit_transform(categories[mask]) + 1
+        classes = le.classes_
+    cat_list = ["background"] + [str(int(c)) if isinstance(c, float) and c.is_integer() else str(c) for c in classes]
+    print(f"  {len(classes)} categories ({order} order)")
     return categories_int, cat_list
 
 
@@ -291,16 +301,21 @@ start_chns     = config.get("start_chns", list(range(len(features))))
 feature_types  = config.get("feature_types", ["category"] * len(features))
 n_bins_config  = config.get("n_bins", 10)
 n_bins_list    = [n_bins_config] * len(features) if isinstance(n_bins_config, int) else n_bins_config
+# "alphabetical" (default) or "frequency" — how category codes, and so colors, are assigned
+order_config   = config.get("category_order", "alphabetical")
+category_orders = [order_config] * len(features) if isinstance(order_config, str) else order_config
 
 assert isinstance(features, list) and isinstance(feature_labels, list)
 assert isinstance(start_chns, list) and isinstance(feature_types, list)
-assert len(features) == len(feature_labels) == len(feature_types) == len(n_bins_list)
+assert len(features) == len(feature_labels) == len(feature_types) == len(n_bins_list) == len(category_orders)
+assert all(o in ("alphabetical", "frequency") for o in category_orders)
 assert all(i < len(features) for i in start_chns)
 
 features       = [features[i]       for i in start_chns]
 feature_labels = [feature_labels[i] for i in start_chns]
 feature_types  = [feature_types[i]  for i in start_chns]
 n_bins_list    = [n_bins_list[i]    for i in start_chns]
+category_orders = [category_orders[i] for i in start_chns]
 
 tilesize = 1024
 
@@ -360,14 +375,14 @@ print(f"image_scalef: {image_scalef}  offset_x: {offset_x}  offset_y: {offset_y}
 height, width = get_umap_df_dim(UMAP_df)
 max_level = determine_maxLevel(height, width)
 
-for feature, start_chn, viz_label, feature_type, n_bins in zip(
-        features, start_chns, feature_labels, feature_types, n_bins_list):
+for feature, start_chn, viz_label, feature_type, n_bins, category_order in zip(
+        features, start_chns, feature_labels, feature_types, n_bins_list, category_orders):
 
     print(f"\n=== {feature} (chn {start_chn}) ===")
     if feature_type == "continuous":
         categories_int, cat_list = binContinuous(data, feature, n_bins)
     else:
-        categories_int, cat_list = findCodes(data, feature)
+        categories_int, cat_list = findCodes(data, feature, category_order)
 
     depth_bit = find_depth_bit(cat_list)
 

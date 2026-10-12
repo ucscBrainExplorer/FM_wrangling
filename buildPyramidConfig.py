@@ -15,6 +15,8 @@ Edit the output JSON to fill in:
     - target_dir
     - start_chns
     - feature_labels (human-readable overrides)
+    - category_order ("alphabetical" or "frequency" per feature — how category
+      codes, and so viewer colors, are assigned)
     - add/remove features as needed
 """
 
@@ -244,6 +246,16 @@ if rejected:
 
 feature_types = [type_map.get(col, "category") for col in selected]
 
+# The viewer cycles a PALETTE_SIZE-color palette over the category codes, so a
+# feature with more categories than that reuses colors. Code those features by
+# descending cell count ("frequency") so the largest categories all get distinct
+# colors; features that fit in the palette keep alphabetical codes.
+PALETTE_SIZE = 16
+category_order = [
+    "frequency" if t == "category" and obs[col].nunique() > PALETTE_SIZE else "alphabetical"
+    for col, t in zip(selected, feature_types)
+]
+
 # Determine output path
 if args.out:
     out_path = args.out
@@ -269,6 +281,7 @@ config = {
     "features": selected,
     "feature_types": feature_types,
     "n_bins": 10,
+    "category_order": category_order,
     "start_chns": list(range(len(selected))),
     "feature_labels": ["organism" if c == "normalized_organism" else c for c in selected],
 }
