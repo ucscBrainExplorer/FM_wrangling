@@ -93,6 +93,12 @@ Runs IncrementalPCA (50 components) on `uce.h5` in streaming chunks. Options:
 
 Outputs: `ipca_model.pkl`, `pca.h5`
 
+On a shared machine (e.g. courtyard), cap the BLAS threads — by default NumPy uses every core (a 7.1M × 512 run took ~34 of courtyard's 64 cores), and IncrementalPCA gains little beyond ~16:
+```bash
+OMP_NUM_THREADS=16 OPENBLAS_NUM_THREADS=16 MKL_NUM_THREADS=16 \
+    python3 FM_wrangling/runIPCA.py --results_dir <ATLAS_DIR>
+```
+
 ## Step 3 — Train PUMAP
 
 Requires a GPU machine (spin up an AWS GPU instance manually). Run via Jupyter notebook.
@@ -150,6 +156,30 @@ The notebook auto-selects tile resolution to keep pixel loss rate <3%, builds mu
 Output: ~60 PNG tiles per feature + `metadata.json` in `target_dir`
 
 ---
+
+## Running on courtyard (GI shared machine)
+
+- **Working directory:** run everything from `/public/groups/hausslerlab/people/jzhu2` (repo, `datasetLists/`, `UCE_brain_512_npy_obs/` live there). The home directory has a ~31 GB quota; large outputs there fail with "Disk quota exceeded".
+- **Staging:** there is no `/nvme`; pass `--staging-dir /data/scratch/jzhu2` to `combineEmbedding.py` (local disk, files not accessed for 14 days are deleted automatically).
+- **Threads:** cap NumPy/sklearn jobs with `OMP_NUM_THREADS=16 OPENBLAS_NUM_THREADS=16 MKL_NUM_THREADS=16` (see PCA above).
+- **No AVX:** the CPU (Xeon E7-4830) cannot run `tiledbsoma` / `cellxgene_census` ("Illegal instruction"). `combineEmbedding.py` reads CELLxGENE metadata from the newest `datasetLists/datasets.info.cxg.*.txt` instead; refresh it with `datasetLists/fetch_cxg_datasets.py`.
+- **Long jobs:** start them in `screen` so they survive the terminal closing.
+
+### UCE brain 512 (`--embedding uce_brain_512`)
+
+- Inputs come from `UCE_brain_512_npy_obs/`; embeddings are 512-dim instead of 1280.
+- Example: `combined_UCE_5neuro_ucebrain512_shuffle/` (5 brain datasets, 7.1M cells, ~16 min with `--shuffle`):
+  ```bash
+  python3 FM_wrangling/combineEmbedding.py --embedding uce_brain_512 \
+      --results_dir combined_UCE_5neuro_ucebrain512_shuffle \
+      --select-datasets-file combined_UCE_5neuro_ucebrain512_shuffle/dataset_ids.tsv \
+      --obs-columns-file combined_UCE_5neuro_ucebrain512_shuffle/obs_columns_brain.txt \
+      --staging-dir /data/scratch/jzhu2 --shuffle
+  ```
+- `--obs-columns-file` (select mode only) limits obs to the listed columns, in file order; without it, select mode writes the union of all columns.
+- `datasetLists/manual_column.json` applies in both modes; rule types `static`, `column` and `map` (value translation, `null` = empty), each with an optional `note` that is copied into `wrangling_notes_combineEmbedding.txt`.
+- KNN: use `--index_type ivfflat` or `ivfpq_128`; `ivfpq_320` fails because 512 is not divisible by 320.
+- PCA/PUMAP models trained on 1280-dim UCE do not apply; retrain on the 512-dim `uce.h5`, and map only query data embedded with the same UCE brain model.
 
 ## Reference
 
