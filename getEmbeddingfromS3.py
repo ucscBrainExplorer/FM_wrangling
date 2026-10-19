@@ -5,8 +5,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     "--embedding",
     required=True,
-    choices=["uce", "scimilarity"],
-    help="Embedding type to use (uce or scimilarity)"
+    choices=["uce", "uce_brain_512", "scimilarity"],
+    help="Embedding type to use (uce, uce_brain_512 or scimilarity)"
 )
 
 args = parser.parse_args()
@@ -14,7 +14,7 @@ embedding = args.embedding
 
 
 import pandas as pd
-import scanpy as sc
+import anndata as ad
 import numpy as np
 import os, re, sys
 import boto3
@@ -36,20 +36,33 @@ if embedding =="uce":
     results_dir = "UCE_npy_obs"
     duplicate_dir = "duplicate_UCE"
     bucket_prefix = "UCE/"
+    file_suffix = "_uce_adata.h5ad"
+    obsm_key = "X_uce"
+elif embedding == "uce_brain_512":
+    results_dir = "UCE_brain_512_npy_obs"
+    duplicate_dir = "duplicate_UCE_brain_512"
+    bucket_prefix = "UCE_brain_512/"
+    file_suffix = "_ucebrain512_adata.h5ad"
+    obsm_key = "X_ucebrain512"
+    embedding = "uce"  # output files named *_uce.npy like uce; location, suffix and obsm key differ
 elif embedding == "scimilarity":
     results_dir = "SCimilarity_npy_obs"
     duplicate_dir = "duplicate_SCimilarity"
     bucket_prefix = "scimilarity/" 
+    file_suffix = "_scimilarity_adata.h5ad"
+    obsm_key = "X_scimilarity"
 else:
     sys.exit(1)
-    
+
+os.makedirs(results_dir, exist_ok=True)
+
 def saveUCE (adata, prefix_id, results_dir):
-    uce_df = pd.DataFrame(adata.obsm['X_uce'])
+    uce_df = pd.DataFrame(adata.obsm[obsm_key])
     np.save(os.path.join(results_dir, f'{prefix_id}_uce.npy'), uce_df)
     adata.obs.to_csv(os.path.join(results_dir, f'{prefix_id}_obs.tsv.gz'), sep='\t', compression='gzip')
     
 def saveSCimilarity (adata, prefix_id, results_dir):
-    scimilarity_df = pd.DataFrame(adata.obsm['X_scimilarity'])
+    scimilarity_df = pd.DataFrame(adata.obsm[obsm_key])
     np.save(os.path.join(results_dir, f'{prefix_id}_scimilarity.npy'), scimilarity_df)
     adata.obs.to_csv(os.path.join(results_dir, f'{prefix_id}_obs.tsv.gz'), sep='\t', compression='gzip')
     
@@ -185,11 +198,8 @@ def process_files_via_h5 (
         s3.download_file(Bucket=bucket, Key=f"{bucket_prefix}{file}", Filename=local_path)
 
         # --- Read from .h5ad ---
-        adata = sc.read_h5ad(local_path, backed="r")
-        if embedding == "uce":
-            x = np.array(adata.obsm["X_uce"])  # (n_cells, n_features)
-        elif embedding == "scimilarity":
-            x = np.array(adata.obsm["X_scimilarity"])  # (n_cells, n_features)
+        adata = ad.read_h5ad(local_path, backed="r")
+        x = np.array(adata.obsm[obsm_key])  # (n_cells, n_features)
 
         n_new, n_features = x.shape
 
@@ -267,10 +277,7 @@ for file in others:
     dataset_id = match.group(1) if match else re.sub(r'\.h5ad$', '', file)
     print (dataset_id)
     
-    if embedding == "uce":
-        file_id = file.replace("_uce_adata.h5ad", "")  # such as f0f0d7c4-3bec-428e-9539-c99d36548d96_(cell_0_1000)
-    elif embedding == "scimilarity":
-        file_id = file.replace("_scimilarity_adata.h5ad", "")  # such as f0f0d7c4-3bec-428e-9539-c99d36548d96_(cell_0_1000)
+    file_id = file.replace(file_suffix, "")  # such as f0f0d7c4-3bec-428e-9539-c99d36548d96_(cell_0_1000)
 
     if result_exists(file_id, results_dir, embedding):
         print (f"{file_id} {embedding} results already available in results dir")
@@ -287,7 +294,7 @@ for file in others:
     s3.download_file(Bucket=bucket, Key=f'{bucket_prefix}{file}', Filename=local_path)
     print(f"Downloaded {bucket_prefix}/{file} → {local_path}")
 
-    adata = sc.read_h5ad(local_path, backed="r")
+    adata = ad.read_h5ad(local_path, backed="r")
     # change adata.obs unique_dataset_id to dataset_id
     adata.obs = adata.obs.rename(columns={"unique_dataset_id": "dataset_id"})
     if embedding == "uce":
