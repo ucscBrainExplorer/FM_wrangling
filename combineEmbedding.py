@@ -440,8 +440,9 @@ else:
 #   {"<dataset_id>": {"<target col>": {"type": "static"|"column"|"map", "value": ...}, ...}}
 #   static: value is the literal; column: value is a source column copied as-is;
 #   map: value is a source column whose values are translated through "map"
-#        ({"<source value>": "<new value>", ...}); unmapped values pass through
-#        unchanged and are reported.
+#        ({"<source value>": "<new value>" | null, ...}); null maps to missing (NaN);
+#        unmapped values pass through unchanged and are reported.
+#   Any rule may carry an optional "note" string, copied into the wrangling notes.
 # Non-dict entries (collection_doi_label, dataset_title) are informational only.
 manual_rules = {}                         # real_dataset_id -> [(target, type, value, mapping)]
 manual_rule_notes = []                    # lines for the wrangling notes
@@ -477,9 +478,10 @@ if not uce_only:
                     target_obs_cols.append(target)
                 # str(): obs is all-string; a JSON number would break the shuffle
                 # path's all-string Parquet schema
-                mapping = ({str(k): str(v) for k, v in rule["map"].items()}
+                mapping = ({str(k): (np.nan if v is None else str(v)) for k, v in rule["map"].items()}
                            if rule["type"] == "map" else None)
-                manual_rules.setdefault(ds_id, []).append((target, rule["type"], str(rule["value"]), mapping))
+                manual_rules.setdefault(ds_id, []).append((target, rule["type"], str(rule["value"]), mapping,
+                                                           rule.get("note")))
     print(f"  manual_column.json: {sum(map(len, manual_rules.values()))} rules for {len(manual_rules)} datasets")
 
 # Pre-declare parquet schema for shuffle mode so every chunk uses the same types.
@@ -587,7 +589,7 @@ for singleDir in data_dirs:
             ds_rules = []
             if real_dataset_id in manual_rules:
                 _hdr = set(pd.read_csv(obs_filepath, sep='\t', nrows=0).columns)
-                for target, rtype, value, mapping in manual_rules[real_dataset_id]:
+                for target, rtype, value, mapping, rnote in manual_rules[real_dataset_id]:
                     if rtype in ("column", "map") and value not in _hdr:
                         note = (f"SKIPPED map column '{value}' -> '{target}' for dataset "
                                 f"'{real_dataset_id}' '{_doi_label}' '{_title}': source column not in obs")
@@ -600,8 +602,11 @@ for singleDir in data_dirs:
                             note = f"Map column '{value}' -> '{target}'"
                         else:
                             note = (f"Map column '{value}' -> '{target}' via value map "
-                                    + ", ".join(f"'{k}'->'{v}'" for k, v in mapping.items()))
+                                    + ", ".join(f"'{k}'->" + ("NaN" if pd.isna(v) else f"'{v}'")
+                                                for k, v in mapping.items()))
                         note += f" for dataset '{real_dataset_id}' '{_doi_label}' '{_title}'"
+                        if rnote:
+                            note += f" -- NOTE: {rnote}"
                         print(f"  {note}")
                     manual_rule_notes.append(note)
 
