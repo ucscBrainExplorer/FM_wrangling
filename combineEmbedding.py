@@ -432,34 +432,54 @@ if union_obs_cols is not None:
 else:
     target_obs_cols = select_cols + ['collection_doi', 'collection_doi_label', 'dataset_title']
 
-# manual_column.json overrides (full run only). In select_datasets mode these are
-# applied later by 0_annotate_obs.ipynb, which needs the source columns that the
-# full run's fixed target_obs_cols would drop — so in a full run they are applied
-# here instead, per chunk before the reindex, while each dataset's own columns
-# (e.g. supercluster_term, Group) are still present.
-#   {"<dataset_id>": {"<target col>": {"type": "static"|"column", "value": ...}, ...}}
+# manual_column.json overrides, applied in both modes per chunk before the reindex,
+# while each dataset's own columns (e.g. supercluster_term, Group) are still present.
+# Full run: a target outside the fixed target_obs_cols is warned about and ignored.
+# select_datasets mode: a target missing from the union schema is appended to it
+# (only for selected datasets), and source columns stay in the output.
+#   {"<dataset_id>": {"<target col>": {"type": "static"|"column"|"map", "value": ...}, ...}}
+#   static: value is the literal; column: value is a source column copied as-is;
+#   map: value is a source column whose values are translated through "map"
+#        ({"<source value>": "<new value>", ...}); unmapped values pass through
+#        unchanged and are reported.
 # Non-dict entries (collection_doi_label, dataset_title) are informational only.
-manual_rules = {}                         # real_dataset_id -> [(target, type, value)]
+manual_rules = {}                         # real_dataset_id -> [(target, type, value, mapping)]
 manual_rule_notes = []                    # lines for the wrangling notes
-if union_obs_cols is None and not uce_only:
+manual_map_unmapped = {}                  # (real_dataset_id, target, source) -> set of unmapped values
+if not uce_only:
     import json
+    # real ids of the selected datasets, derived the same way as real_dataset_id below
+    selected_real_ids = set()
+    for _sid in select_datasets:
+        _m = re.match(r'^((?:ucsc-)?[a-f0-9\-]+)_', f"{_sid}_{embedding}.npy")
+        selected_real_ids.add(_m.group(1) if _m else _sid)
     with open(manual_column_file) as f:
         for ds_id, cfg in json.load(f).items():
             for target, rule in cfg.items():
                 if not isinstance(rule, dict):
                     continue
-                if rule.get("type") not in ("static", "column") or "value" not in rule:
+                if rule.get("type") not in ("static", "column", "map") or "value" not in rule:
                     print(f"ERROR: {manual_column_file}: {ds_id}.{target} needs \"type\": "
-                          f"\"static\"|\"column\" and a \"value\" (got {rule!r})")
+                          f"\"static\"|\"column\"|\"map\" and a \"value\" (got {rule!r})")
                     sys.exit(1)
-                if target not in target_obs_cols:
-                    # would be dropped by the reindex anyway
-                    print(f"  WARNING: {manual_column_file}: {ds_id}.{target} is not a full-run obs "
-                          f"column; rule ignored")
+                if rule["type"] == "map" and not (isinstance(rule.get("map"), dict) and rule["map"]):
+                    print(f"ERROR: {manual_column_file}: {ds_id}.{target} \"type\": \"map\" needs a "
+                          f"non-empty \"map\" object (got {rule!r})")
+                    sys.exit(1)
+                if union_obs_cols is not None and ds_id not in selected_real_ids:
                     continue
+                if target not in target_obs_cols:
+                    if union_obs_cols is None:
+                        # would be dropped by the reindex anyway
+                        print(f"  WARNING: {manual_column_file}: {ds_id}.{target} is not a full-run obs "
+                              f"column; rule ignored")
+                        continue
+                    target_obs_cols.append(target)
                 # str(): obs is all-string; a JSON number would break the shuffle
                 # path's all-string Parquet schema
-                manual_rules.setdefault(ds_id, []).append((target, rule["type"], str(rule["value"])))
+                mapping = ({str(k): str(v) for k, v in rule["map"].items()}
+                           if rule["type"] == "map" else None)
+                manual_rules.setdefault(ds_id, []).append((target, rule["type"], str(rule["value"]), mapping))
     print(f"  manual_column.json: {sum(map(len, manual_rules.values()))} rules for {len(manual_rules)} datasets")
 
 # Pre-declare parquet schema for shuffle mode so every chunk uses the same types.
@@ -563,19 +583,24 @@ for singleDir in data_dirs:
                 dataset_collection_info.append((real_dataset_id, _doi, _doi_label, _title))
 
             # resolve this dataset's manual_column.json rules against its obs header;
-            # a "column" rule whose source column is missing is skipped with a warning
+            # a "column"/"map" rule whose source column is missing is skipped with a warning
             ds_rules = []
             if real_dataset_id in manual_rules:
                 _hdr = set(pd.read_csv(obs_filepath, sep='\t', nrows=0).columns)
-                for target, rtype, value in manual_rules[real_dataset_id]:
-                    if rtype == "column" and value not in _hdr:
+                for target, rtype, value, mapping in manual_rules[real_dataset_id]:
+                    if rtype in ("column", "map") and value not in _hdr:
                         note = (f"SKIPPED map column '{value}' -> '{target}' for dataset "
                                 f"'{real_dataset_id}' '{_doi_label}' '{_title}': source column not in obs")
                         print(f"  WARNING: {note}")
                     else:
-                        ds_rules.append((target, rtype, value))
-                        note = (f"Set '{target}' = '{value}'" if rtype == "static"
-                                else f"Map column '{value}' -> '{target}'")
+                        ds_rules.append((target, rtype, value, mapping))
+                        if rtype == "static":
+                            note = f"Set '{target}' = '{value}'"
+                        elif rtype == "column":
+                            note = f"Map column '{value}' -> '{target}'"
+                        else:
+                            note = (f"Map column '{value}' -> '{target}' via value map "
+                                    + ", ".join(f"'{k}'->'{v}'" for k, v in mapping.items()))
                         note += f" for dataset '{real_dataset_id}' '{_doi_label}' '{_title}'"
                         print(f"  {note}")
                     manual_rule_notes.append(note)
@@ -624,9 +649,19 @@ for singleDir in data_dirs:
                     obs_filtered["collection_doi"]       = _doi
                     obs_filtered["collection_doi_label"] = _doi_label
                     obs_filtered["dataset_title"]        = _title
-                    # manual_column.json overrides (full run only, see manual_rules)
-                    for target, rtype, value in ds_rules:
-                        obs_filtered[target] = value if rtype == "static" else obs_filtered[value]
+                    # manual_column.json overrides (see manual_rules)
+                    for target, rtype, value, mapping in ds_rules:
+                        if rtype == "static":
+                            obs_filtered[target] = value
+                        elif rtype == "column":
+                            obs_filtered[target] = obs_filtered[value]
+                        else:
+                            src = obs_filtered[value]
+                            hit = src.isin(mapping.keys())
+                            unmapped = set(src[~hit & src.notna()].unique())
+                            if unmapped:
+                                manual_map_unmapped.setdefault((real_dataset_id, target, value), set()).update(unmapped)
+                            obs_filtered[target] = src.map(mapping).where(hit, src)
                     # Pad/select onto the fixed target column set (see target_obs_cols
                     # above) so every dataset's chunks share the same columns, whether
                     # or not this particular dataset's obs.tsv has all of them.
@@ -744,10 +779,15 @@ with open(wrangling_notes_path, "w") as wf:
         wf.write(f"    dataset_title:        {_fmt(title)}\n")
     wf.write(f"\nDatasets processed: {len(dataset_list)}\n")
     if manual_rule_notes:
-        wf.write(f"\nmanual_column.json overrides applied in combine (full run; "
+        wf.write(f"\nmanual_column.json overrides applied in combine "
+                 f"({'select_datasets' if union_obs_cols is not None else 'full run'}; "
                  f"{manual_column_file}):\n")
         for note in manual_rule_notes:
             wf.write(f"  {note}\n")
+    if manual_map_unmapped:
+        wf.write("\nmanual_column.json map rules: source values with no map entry (kept unchanged):\n")
+        for (ds_id, target, src_col), vals in manual_map_unmapped.items():
+            wf.write(f"  {ds_id} '{src_col}' -> '{target}': {sorted(vals)}\n")
     if remapfile_exist_datasets:
         wf.write("UCSC remap (_remap.tsv + _obs_mapped.tsv.gz): mapped columns merged into obs as-is (no renaming)\n")
         wf.write(f"\nUCSC remap merged ({len(remapfile_exist_datasets)} datasets):\n")
@@ -759,4 +799,6 @@ with open(wrangling_notes_path, "w") as wf:
                     for line in doc_f:
                         wf.write("    " + line)
                 wf.write("\n")
+for (ds_id, target, src_col), vals in manual_map_unmapped.items():
+    print(f"WARNING: {ds_id} map '{src_col}' -> '{target}': no map entry for {sorted(vals)} (kept unchanged)")
 print(f"Wrangling notes written to {wrangling_notes_path}")
