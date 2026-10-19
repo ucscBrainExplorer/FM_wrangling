@@ -4,8 +4,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     "--embedding",
     required=True,
-    choices=["uce", "scimilarity"],
-    help="Embedding type to use (uce or scimilarity)"
+    choices=["uce", "uce_brain_512", "scimilarity"],
+    help="Embedding type to use (uce, uce_brain_512 or scimilarity)"
 )
 
 parser.add_argument(
@@ -38,9 +38,9 @@ parser.add_argument(
     help="Shuffle cells in the combined output. Must not be used with --obs-only or --uce-only."
 )
 parser.add_argument(
-    "--nvme-dir",
+    "--staging-dir",
     default="/nvme",
-    help="Path to fast local NVMe scratch space for staging output files before moving to EFS (default: /nvme)"
+    help="Fast local scratch for staging output files before moving them to results_dir (default: /nvme)"
 )
 
 args = parser.parse_args()
@@ -55,7 +55,7 @@ if args.shuffle and (args.obs_only or args.uce_only):
 shuffle = args.shuffle
 embedding = args.embedding
 results_dir = args.results_dir
-nvme_dir = args.nvme_dir
+staging_dir = args.staging_dir
 import shutil
 import mmap
 import numpy as np
@@ -128,6 +128,12 @@ if embedding =="uce":
     data_dirs =["UCE_npy_obs", "duplicate_UCE"]
     dup_dir = "duplicate_UCE"
     n_cols = 1280
+elif embedding == "uce_brain_512":
+    embedding_outfile = "uce.h5"
+    data_dirs =["UCE_brain_512_npy_obs", "duplicate_UCE_brain_512"]
+    dup_dir = "duplicate_UCE_brain_512"
+    n_cols = 512
+    embedding = "uce"  # input files named *_uce.npy like uce; location and width differ
 elif embedding == "scimilarity":
     embedding_outfile = "scimilarity.h5"
     data_dirs =["SCimilarity_npy_obs", "duplicate_SCimilarity"]
@@ -357,14 +363,14 @@ if not obs_only:
             else:
                 print(f"  No .npy files matched in {data_dirs} after ignore_datasets filtering")
             sys.exit(1)
-        nvme_tmp = os.path.join(nvme_dir, f"{embedding}_shuffle_{os.path.basename(os.path.normpath(results_dir))}.dat")
-        print(f"  Creating NVMe memmap: {nvme_tmp}")
-        uce_mmap = np.memmap(nvme_tmp, dtype=arr_dtype, mode='w+', shape=(prescan_total, n_cols))
+        staging_tmp = os.path.join(staging_dir, f"{embedding}_shuffle_{os.path.basename(os.path.normpath(results_dir))}.dat")
+        print(f"  Creating staging memmap: {staging_tmp}")
+        uce_mmap = np.memmap(staging_tmp, dtype=arr_dtype, mode='w+', shape=(prescan_total, n_cols))
         uce_write_pos = 0
     else:
-        _uce_nvme_tmp = os.path.join(nvme_dir, f"{embedding}_{os.path.basename(os.path.normpath(results_dir))}.h5")
-        print(f"  Writing UCE h5 to NVMe staging: {_uce_nvme_tmp}")
-        fuce = h5py.File(_uce_nvme_tmp, "w")
+        _uce_staging_tmp = os.path.join(staging_dir, f"{embedding}_{os.path.basename(os.path.normpath(results_dir))}.h5")
+        print(f"  Writing UCE h5 to staging: {_uce_staging_tmp}")
+        fuce = h5py.File(_uce_staging_tmp, "w")
         dset_uce = fuce.create_dataset("data",
                                        shape=(0, n_cols),
                                        maxshape=(None, n_cols),
@@ -376,13 +382,13 @@ if not uce_only:
     obs_outpath = os.path.join(results_dir, obs_outfile)
     if shuffle:
         import pyarrow as pa, pyarrow.parquet as pq
-        _obs_tmp = os.path.join(nvme_dir, f"obs_tmp_{os.path.basename(os.path.normpath(results_dir))}.parquet")
+        _obs_tmp = os.path.join(staging_dir, f"obs_tmp_{os.path.basename(os.path.normpath(results_dir))}.parquet")
         _pq_writer = None
     else:
         import gzip as _gzip
-        _obs_nvme_tmp = os.path.join(nvme_dir, f"obs_{os.path.basename(os.path.normpath(results_dir))}.tsv.gz")
-        print(f"  Writing obs to NVMe staging: {_obs_nvme_tmp}")
-        _obs_out = _gzip.open(_obs_nvme_tmp, 'wt')
+        _obs_staging_tmp = os.path.join(staging_dir, f"obs_{os.path.basename(os.path.normpath(results_dir))}.tsv.gz")
+        print(f"  Writing obs to staging: {_obs_staging_tmp}")
+        _obs_out = _gzip.open(_obs_staging_tmp, 'wt')
         _obs_header_written = False
 
 # pre-scan obs column headers for select_datasets mode — schemas differ across datasets
@@ -661,9 +667,9 @@ for singleDir in data_dirs:
             print ("Duplicate dataset")
 if not obs_only and not shuffle:
     fuce.close()
-    uce_efs_path = os.path.join(results_dir, embedding_outfile)
-    print(f"Moving UCE h5 NVMe -> EFS: {_uce_nvme_tmp} -> {uce_efs_path}")
-    shutil.move(_uce_nvme_tmp, uce_efs_path)
+    uce_out_path = os.path.join(results_dir, embedding_outfile)
+    print(f"Moving UCE h5 staging -> results_dir: {_uce_staging_tmp} -> {uce_out_path}")
+    shutil.move(_uce_staging_tmp, uce_out_path)
 
 if shuffle and not obs_only:
     actual_total = uce_write_pos
@@ -673,7 +679,7 @@ if shuffle and not obs_only:
     shuffle_idx_path = os.path.join(results_dir, "shuffle_index.uce.npy")
     np.save(shuffle_idx_path, shuffle_idx)
     print(f"Shuffle index saved to {shuffle_idx_path}")
-    print("Writing shuffled UCE to HDF5 (NVMe -> EFS)...")
+    print("Writing shuffled UCE to HDF5 (staging -> results_dir)...")
     uce_h5_path = os.path.join(results_dir, embedding_outfile)
     shuffle_chunk = 100_000
     with h5py.File(uce_h5_path, 'w') as fout:
@@ -682,23 +688,23 @@ if shuffle and not obs_only:
             out_end = min(out_start + shuffle_chunk, actual_total)
             dset_out[out_start:out_end] = uce_mmap[shuffle_idx[out_start:out_end]]
     del uce_mmap
-    os.remove(nvme_tmp)
+    os.remove(staging_tmp)
     print("UCE shuffle complete.")
 
 if not uce_only:
     if shuffle:
         if _pq_writer is not None:
             _pq_writer.close()
-        print("Writing shuffled obs in chunks (NVMe staging)...")
-        _obs_shuf_nvme_tmp = os.path.join(nvme_dir, f"obs_{os.path.basename(os.path.normpath(results_dir))}.tsv.gz")
-        write_shuffled_obs(_obs_tmp, shuffle_idx, _obs_shuf_nvme_tmp)
+        print("Writing shuffled obs in chunks (staging)...")
+        _obs_shuf_staging_tmp = os.path.join(staging_dir, f"obs_{os.path.basename(os.path.normpath(results_dir))}.tsv.gz")
+        write_shuffled_obs(_obs_tmp, shuffle_idx, _obs_shuf_staging_tmp)
         os.remove(_obs_tmp)
-        print(f"Moving obs NVMe -> EFS: {_obs_shuf_nvme_tmp} -> {obs_outpath}")
-        shutil.move(_obs_shuf_nvme_tmp, obs_outpath)
+        print(f"Moving obs staging -> results_dir: {_obs_shuf_staging_tmp} -> {obs_outpath}")
+        shutil.move(_obs_shuf_staging_tmp, obs_outpath)
     else:
         _obs_out.close()
-        print(f"Moving obs NVMe -> EFS: {_obs_nvme_tmp} -> {obs_outpath}")
-        shutil.move(_obs_nvme_tmp, obs_outpath)
+        print(f"Moving obs staging -> results_dir: {_obs_staging_tmp} -> {obs_outpath}")
+        shutil.move(_obs_staging_tmp, obs_outpath)
     print(f"Obs written to {obs_outpath}")
 
 print(f"these {len(dataset_list)} datasets are combined")
