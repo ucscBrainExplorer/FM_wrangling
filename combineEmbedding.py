@@ -20,6 +20,12 @@ parser.add_argument(
     help="Path to a file with dataset IDs to process (one per line)"
 )
 parser.add_argument(
+    "--obs-columns-file",
+    default=None,
+    help="With --select-datasets-file only: file listing the obs columns to output, one per "
+         "line ('#' comments allowed), in output order, instead of the union of all columns"
+)
+parser.add_argument(
     "--obs-only",
     action="store_true",
     default=False,
@@ -49,6 +55,10 @@ import os, sys, re, glob
 
 if args.shuffle and (args.obs_only or args.uce_only):
     print("ERROR: --shuffle cannot be used with --obs-only or --uce-only — obs and uce must be written together to stay in sync.")
+    sys.exit(1)
+
+if args.obs_columns_file and not args.select_datasets_file:
+    print("ERROR: --obs-columns-file requires --select-datasets-file (a full run always writes the fixed standard column set).")
     sys.exit(1)
 
 shuffle = args.shuffle
@@ -147,6 +157,9 @@ select_datasets = []
 if args.select_datasets_file:
     with open(args.select_datasets_file, 'r') as f:
         select_datasets = [line.strip().split("\t")[0] for line in f if line.strip() and not line.startswith("#")]
+    if not select_datasets:
+        print(f"ERROR: {args.select_datasets_file} lists no dataset ids")
+        sys.exit(1)
 
 obs_outfile = "obs.tsv.gz"
 
@@ -291,7 +304,11 @@ def get_ucsc_collection():
 
 #cellxgene info: newest datasetLists/datasets.info.cxg.YYYY-MM-DD.txt (from fetch_cxg_datasets.py);
 # replaces cellxgene_census.open_soma(), whose tiledbsoma needs AVX (courtyard has none)
-cxg_info_file = sorted(glob.glob("datasetLists/datasets.info.cxg.*.txt"))[-1]
+_cxg_info_files = sorted(glob.glob("datasetLists/datasets.info.cxg.*.txt"))
+if not _cxg_info_files:
+    print("ERROR: no datasetLists/datasets.info.cxg.*.txt found; run datasetLists/fetch_cxg_datasets.py")
+    sys.exit(1)
+cxg_info_file = _cxg_info_files[-1]
 print(f"  CELLxGENE dataset info: {cxg_info_file}")
 cxgInfo = pd.read_csv(cxg_info_file, sep="\t", dtype=str).rename(columns={"#dataset_id": "dataset_id"})
 
@@ -432,11 +449,32 @@ if union_obs_cols is not None:
 else:
     target_obs_cols = select_cols + ['collection_doi', 'collection_doi_label', 'dataset_title']
 
+# --obs-columns-file (select_datasets mode only): explicit output column list, in
+# file order, replacing the union above. Columns a rule or the reindex needs as a source (e.g. Subclass,
+# load_id) are read from each dataset's obs before the reindex, so they need not
+# be listed; only the output is restricted.
+obs_columns_file = args.obs_columns_file
+if obs_columns_file and not uce_only:
+    with open(obs_columns_file) as f:
+        _listed = [line.strip() for line in f if line.strip() and not line.startswith("#")]
+    _dups = sorted({c for c in _listed if _listed.count(c) > 1})
+    if _dups or "new_index" in _listed:
+        print(f"ERROR: {obs_columns_file}: duplicate columns {_dups} or 'new_index' "
+              f"(the index, always written) listed")
+        sys.exit(1)
+    _absent = [c for c in _listed if c not in (union_obs_cols or [])]
+    if _absent:
+        print(f"  WARNING: {obs_columns_file}: not in any selected dataset's obs "
+              f"(empty unless a manual_column.json rule fills them): {_absent}")
+    target_obs_cols = _listed
+    print(f"  obs columns: {len(target_obs_cols)} from {obs_columns_file}")
+
 # manual_column.json overrides, applied in both modes per chunk before the reindex,
 # while each dataset's own columns (e.g. supercluster_term, Group) are still present.
 # Full run: a target outside the fixed target_obs_cols is warned about and ignored.
 # select_datasets mode: a target missing from the union schema is appended to it
-# (only for selected datasets), and source columns stay in the output.
+# (only for selected datasets), and source columns stay in the output; with
+# --obs-columns-file, only listed targets are applied and listed columns output.
 #   {"<dataset_id>": {"<target col>": {"type": "static"|"column"|"map", "value": ...}, ...}}
 #   static: value is the literal; column: value is a source column copied as-is;
 #   map: value is a source column whose values are translated through "map"
@@ -444,7 +482,7 @@ else:
 #        unmapped values pass through unchanged and are reported.
 #   Any rule may carry an optional "note" string, copied into the wrangling notes.
 # Non-dict entries (collection_doi_label, dataset_title) are informational only.
-manual_rules = {}                         # real_dataset_id -> [(target, type, value, mapping)]
+manual_rules = {}                         # real_dataset_id -> [(target, type, value, mapping, note)]
 manual_rule_notes = []                    # lines for the wrangling notes
 manual_map_unmapped = {}                  # (real_dataset_id, target, source) -> set of unmapped values
 if not uce_only:
@@ -470,9 +508,9 @@ if not uce_only:
                 if union_obs_cols is not None and ds_id not in selected_real_ids:
                     continue
                 if target not in target_obs_cols:
-                    if union_obs_cols is None:
+                    if union_obs_cols is None or obs_columns_file:
                         # would be dropped by the reindex anyway
-                        print(f"  WARNING: {manual_column_file}: {ds_id}.{target} is not a full-run obs "
+                        print(f"  WARNING: {manual_column_file}: {ds_id}.{target} is not an output obs "
                               f"column; rule ignored")
                         continue
                     target_obs_cols.append(target)
@@ -770,8 +808,10 @@ def _dataset_info(dataset_id, ucsc_datasets, cxgInfo, ucscInfo):
 wrangling_notes_path = os.path.join(results_dir, "wrangling_notes_combineEmbedding.txt")
 with open(wrangling_notes_path, "w") as wf:
     wf.write(f"generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-    wf.write(f"embedding: {embedding}\n")
+    wf.write(f"embedding: {args.embedding}\n")
     wf.write(f"results_dir: {results_dir}\n")
+    if obs_columns_file:
+        wf.write(f"obs columns: {len(target_obs_cols)} listed in {obs_columns_file}\n")
     wf.write("\n")
     wf.write("Combine .obs fields from source embedding files\n")
     wf.write("Added columns 'collection_doi', 'collection_doi_label', 'dataset_title' per dataset:\n")
