@@ -15,8 +15,13 @@ embedding = args.embedding
 
 import pandas as pd
 import anndata as ad
+try:
+    from anndata.io import read_elem
+except ImportError:  # anndata < 0.11
+    from anndata.experimental import read_elem
+import io
 import numpy as np
-import os, re, sys
+import os, re, sys, time
 import boto3
 from collections import defaultdict
 import h5py
@@ -71,6 +76,39 @@ def result_exists(prefix_id, results_dir, embedding):
         return True
     else:
         return False
+
+class S3File(io.RawIOBase):
+    """Read-only, seekable file object over an S3 object using ranged GETs,
+    so h5py fetches only the bytes it reads instead of the whole file."""
+    def __init__(self, s3, bucket, key):
+        self.s3, self.bucket, self.key, self.pos = s3, bucket, key, 0
+        self.size = s3.head_object(Bucket=bucket, Key=key)["ContentLength"]
+    def readable(self): return True
+    def seekable(self): return True
+    def tell(self): return self.pos
+    def seek(self, offset, whence=0):
+        self.pos = {0: offset, 1: self.pos + offset, 2: self.size + offset}[whence]
+        return self.pos
+    def readinto(self, b):
+        n = min(len(b), self.size - self.pos)
+        if n <= 0:
+            return 0
+        data = self.s3.get_object(
+            Bucket=self.bucket, Key=self.key, Range=f"bytes={self.pos}-{self.pos + n - 1}"
+        )["Body"].read()
+        b[:len(data)] = data
+        self.pos += len(data)
+        return len(data)
+
+def read_from_s3(profile, bucket, key):
+    """Read only obs and obsm[obsm_key] of an .h5ad on S3 (~40 MB of a ~950 MB
+    file; X is never fetched). Returns an in-memory AnnData with just those."""
+    s3 = boto3.Session(profile_name=profile).client("s3")
+    raw = io.BufferedReader(S3File(s3, bucket, key), buffer_size=4 << 20)
+    with h5py.File(raw, "r") as f:
+        x = f["obsm"][obsm_key][:]
+        obs = read_elem(f["obs"])
+    return ad.AnnData(obs=obs, obsm={obsm_key: x})
 
 def get_NRP_h5ad_filenames():
     result=[]
@@ -191,14 +229,9 @@ def process_files_via_h5 (
     for file in files:
         print("Processing", start, file)
 
-        # --- Download file from S3 ---
-        local_path = f"download_{embedding}.h5ad"
-        session = boto3.Session(profile_name=profile)
-        s3 = session.client("s3")
-        s3.download_file(Bucket=bucket, Key=f"{bucket_prefix}{file}", Filename=local_path)
-
-        # --- Read from .h5ad ---
-        adata = ad.read_h5ad(local_path, backed="r")
+        # --- Read obs and embedding directly from S3 ---
+        t0 = time.perf_counter()
+        adata = read_from_s3(profile, bucket, f"{bucket_prefix}{file}")
         x = np.array(adata.obsm[obsm_key])  # (n_cells, n_features)
 
         n_new, n_features = x.shape
@@ -212,7 +245,6 @@ def process_files_via_h5 (
                     maxshape=(None, n_features),  # allow unlimited rows
                     dtype="float32",
                     chunks=True,
-                    compression="gzip",
                 )
             elif embedding == "scimilarity":
                 dset = h5f.create_dataset(
@@ -221,14 +253,15 @@ def process_files_via_h5 (
                     maxshape=(None, n_features),  # allow unlimited rows
                     dtype="float32",
                     chunks=True,
-                    compression="gzip",
                 )
 
         # --- Resize and append new data ---
+        t1 = time.perf_counter()
         dset.resize(dset.shape[0] + n_new, axis=0)
         dset[-n_new:] = x
 
         # --- Append metadata ---
+        t2 = time.perf_counter()
         obs_df = adata.obs.rename(columns={"unique_dataset_id": "dataset_id"})
         if col_order is None:
             col_order = obs_df.columns.tolist()
@@ -239,6 +272,8 @@ def process_files_via_h5 (
                 warnings.warn(f"Batch {file} missing columns {missing}; filling with NA")
             obs_df = obs_df.reindex(columns=col_order)
             obs_df.to_csv(obs_path, sep="\t", mode="a", header=False)
+        t3 = time.perf_counter()
+        print(f"  read {t1 - t0:.1f}s, h5 append {t2 - t1:.1f}s, obs tsv {t3 - t2:.1f}s")
 
         start += n_new
 
@@ -287,14 +322,10 @@ for file in others:
         continue
         
     print (f"{file_id} processing ...")
-    #download the file from s3 bucket
-    local_path = f"download_{embedding}.h5ad"   # where to save locally
-    session = boto3.Session(profile_name=profile)
-    s3 = session.client("s3")
-    s3.download_file(Bucket=bucket, Key=f'{bucket_prefix}{file}', Filename=local_path)
-    print(f"Downloaded {bucket_prefix}/{file} → {local_path}")
+    # read obs and embedding directly from the s3 bucket
+    adata = read_from_s3(profile, bucket, f'{bucket_prefix}{file}')
+    print(f"Read {bucket_prefix}{file}")
 
-    adata = ad.read_h5ad(local_path, backed="r")
     # change adata.obs unique_dataset_id to dataset_id
     adata.obs = adata.obs.rename(columns={"unique_dataset_id": "dataset_id"})
     if embedding == "uce":
