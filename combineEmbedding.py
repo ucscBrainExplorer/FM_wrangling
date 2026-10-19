@@ -45,8 +45,7 @@ parser.add_argument(
 
 args = parser.parse_args()
 
-import cellxgene_census  # python3.11
-import os, sys, re
+import os, sys, re, glob
 
 if args.shuffle and (args.obs_only or args.uce_only):
     print("ERROR: --shuffle cannot be used with --obs-only or --uce-only — obs and uce must be written together to stay in sync.")
@@ -290,11 +289,13 @@ def get_ucsc_collection():
     )
     return df
 
-#cellxgene info
-latest_census = cellxgene_census.open_soma(census_version = "latest")
-cxgInfo = latest_census["census_info"]["datasets"].read().concat().to_pandas()
+#cellxgene info: newest datasetLists/datasets.info.cxg.YYYY-MM-DD.txt (from fetch_cxg_datasets.py);
+# replaces cellxgene_census.open_soma(), whose tiledbsoma needs AVX (courtyard has none)
+cxg_info_file = sorted(glob.glob("datasetLists/datasets.info.cxg.*.txt"))[-1]
+print(f"  CELLxGENE dataset info: {cxg_info_file}")
+cxgInfo = pd.read_csv(cxg_info_file, sep="\t", dtype=str).rename(columns={"#dataset_id": "dataset_id"})
 
-# fallback: Discovery API for datasets not in Census (e.g. MERFISH/spatial)
+# fallback: Discovery API for datasets not in the datasets.info table (e.g. MERFISH/spatial)
 # keyed by CXG explorer URL ID (the UUID in explorer_url, which is used as the .npy filename)
 # _discovery_index: cxg_id -> {collection_id, name}  (fetched once, no collection calls yet)
 # _discovery_collection_cache: collection_id -> (doi, doi_label)  (fetched on demand)
@@ -551,7 +552,7 @@ for singleDir in data_dirs:
                             _doi       = disc["collection_doi"]
                             _title     = disc["dataset_title"]
                         else:
-                            print(f"  WARNING: {dataset_id} not found in Census or Discovery; collection fields set to NaN")
+                            print(f"  WARNING: {dataset_id} not found in {cxg_info_file} or Discovery; collection fields set to NaN")
                             _doi_label = np.nan
                             _doi       = np.nan
                             _title     = np.nan
