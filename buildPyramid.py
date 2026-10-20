@@ -238,11 +238,13 @@ def saveAsTiles(array_2d_cat, level, tile_size, bitdepth, start_chn, build_dir, 
         final_png = f"{target_dir}/p{start_chn}-{level}-{ty}-{tx}.png"
         imageio.imwrite(raw_png, tile)
         dim = f"{tile_size}x{tile_size}"
-        os.system(f"convert {raw_png} -crop {dim} -define png:bit-depth={bitdepth} "
-                  f"-depth {bitdepth} -background none -extent {dim} -alpha off {final_png}")
+        ret = os.system(f"convert {raw_png} -crop {dim} -define png:bit-depth={bitdepth} "
+                        f"-depth {bitdepth} -background none -extent {dim} -alpha off {final_png}")
+        if ret != 0:
+            raise RuntimeError(f"convert failed ({ret}) for {final_png}")
 
     with ThreadPoolExecutor(max_workers=os.cpu_count()) as executor:
-        executor.map(process_tile, enumerate(tiles_keys))
+        list(executor.map(process_tile, enumerate(tiles_keys)))
 
 
 def write_json(reference_name, viz_label, start_chn, cat_list, feature_type,
@@ -253,7 +255,7 @@ def write_json(reference_name, viz_label, start_chn, cat_list, feature_type,
         with open(path) as f:
             J = json.load(f)
         assert J["tileSize"] == tilesize
-        assert J["levels"] == max_level + 1
+        assert J["levels"] == max_level + 1 - args.skip_top_levels
         assert J["offset"] == [float(offset_x), float(offset_y)]
         assert J["image_scalef"] == float(image_scalef)
         for i in range(len(J["phenotypes"]), start_chn + 1):
@@ -268,7 +270,7 @@ def write_json(reference_name, viz_label, start_chn, cat_list, feature_type,
             "phenotypes": [],
             "size": [int(width / math.pow(2, max_level)), int(height / math.pow(2, max_level))],
             "tileSize": tilesize,
-            "levels": max_level + 1,
+            "levels": max_level + 1 - args.skip_top_levels,
             "fileformat": "png",
             "offset": [float(offset_x), float(offset_y)],
             "image_scalef": float(image_scalef),
