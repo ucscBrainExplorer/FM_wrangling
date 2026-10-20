@@ -29,9 +29,14 @@ Usage:
 
 import argparse
 import os
+import sys
 
 import h5py
 import numpy as np
+
+# Block tensorflow so `import umap` skips ParametricUMAP: the system TF build
+# requires AVX and crashes with "Illegal instruction" on non-AVX hosts.
+sys.modules.setdefault("tensorflow", None)
 import umap
 from sklearn.decomposition import PCA
 
@@ -66,7 +71,8 @@ def run_umap(
     min_dist: float = 0.1,
     n_components: int = 2,
     metric: str = "euclidean",
-    random_state: int = 42,
+    random_state: int | None = 42,
+    n_jobs: int = -1,
 ) -> np.ndarray:
     X = np.ascontiguousarray(X, dtype=np.float32)
 
@@ -86,6 +92,7 @@ def run_umap(
         n_components=n_components,
         metric=metric,
         random_state=random_state,
+        n_jobs=n_jobs,
         verbose=True,
     )
     embedding = reducer.fit_transform(X)
@@ -107,8 +114,22 @@ def main():
     parser.add_argument("--min-dist", type=float, default=0.1)
     parser.add_argument("--n-components", type=int, default=2)
     parser.add_argument("--metric", default="euclidean")
-    parser.add_argument("--random-state", type=int, default=42)
+    parser.add_argument(
+        "--random-state",
+        type=int,
+        default=42,
+        help="Seed (default: 42). A seed forces UMAP to run single-threaded; pass -1 for no seed "
+        "to use all cores (faster, but the layout is not reproducible).",
+    )
+    parser.add_argument(
+        "--n-jobs",
+        type=int,
+        default=-1,
+        help="Threads for UMAP (default: -1 = all cores). Only takes effect with --random-state -1.",
+    )
     args = parser.parse_args()
+    if args.random_state < 0:
+        args.random_state = None
 
     X = load_array(args.input, args.key)
     print(f"Loaded input array with shape {X.shape} from {args.input}")
@@ -121,6 +142,7 @@ def main():
         n_components=args.n_components,
         metric=args.metric,
         random_state=args.random_state,
+        n_jobs=args.n_jobs,
     )
 
     np.save(args.output, embedding)
