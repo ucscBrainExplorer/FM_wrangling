@@ -34,7 +34,8 @@ parser.add_argument("--umap_file", required=True,
 parser.add_argument("--metadata_file", default="obs.tsv.gz",
                     help="Obs metadata filename inside results_dir (default: obs.tsv.gz)")
 parser.add_argument("--out", default=None,
-                    help="Output JSON path (default: <results_dir>/pyramid_e{N}_config.json)")
+                    help="Output JSON path (default: <results_dir>/pyramid_<umap stem minus umap_>_config.json, "
+                         "e.g. umap_e20.npy -> pyramid_e20_config.json)")
 parser.add_argument("--pinned", default=None,
                     help="Column to pin as the primary cell label (overrides CELL_LABEL_CANDIDATES)")
 parser.add_argument("--columns", default=None,
@@ -256,14 +257,16 @@ category_order = [
     for col, t in zip(selected, feature_types)
 ]
 
-# Determine output path
+# Determine output path: named after the UMAP file stem minus a leading "umap_",
+# so umap_e20.npy -> pyramid_e20_config.json and umap_corrected_k5.npy ->
+# pyramid_corrected_k5_config.json. Each UMAP gets its own config, so the
+# carry-over below never hands one reference's uuid/target_dir to another.
 if args.out:
     out_path = args.out
 else:
-    import re
-    m = re.search(r'e(\d+)', args.umap_file)
-    epoch_str = f"_e{m.group(1)}" if m else ""
-    out_path = os.path.join(args.results_dir, f"pyramid{epoch_str}_config.json")
+    stem = os.path.splitext(os.path.basename(args.umap_file))[0]
+    stem = stem[len("umap_"):] if stem.startswith("umap_") else stem
+    out_path = os.path.join(args.results_dir, f"pyramid_{stem}_config.json")
 
 # Read existing config to carry over reference_name, reference_uuid, target_dir, start_chns
 existing = {}
@@ -271,6 +274,9 @@ if os.path.exists(out_path):
     with open(out_path) as f:
         existing = json.load(f)
     print(f"\nFound existing config at {out_path} — reusing reference_name, reference_uuid, target_dir")
+    if existing.get("umap_file") not in (None, args.umap_file):
+        print(f"  WARNING: existing config was built for {existing['umap_file']}, not {args.umap_file}; "
+              f"check that its reference_uuid/target_dir should carry over")
 
 config = {
     "reference_name": existing.get("reference_name", ""),
