@@ -17,7 +17,8 @@ parser.add_argument(
 parser.add_argument(
     "--select-datasets-file",
     default=None,
-    help="Path to a file with dataset IDs to process (one per line)"
+    help="File of datasets to process, one per line: dataset ID, then optionally <tab> source h5ad URL "
+         "(else taken from <id>_source.txt); the URLs are written to <results_dir>/dataset_ids.tsv"
 )
 parser.add_argument(
     "--obs-columns-file",
@@ -156,10 +157,43 @@ os.makedirs(results_dir, exist_ok=True)
 select_datasets = []
 if args.select_datasets_file:
     with open(args.select_datasets_file, 'r') as f:
-        select_datasets = [line.strip().split("\t")[0] for line in f if line.strip() and not line.startswith("#")]
+        select_rows = [line.rstrip("\n").split("\t") for line in f if line.strip() and not line.startswith("#")]
+    select_datasets = [row[0].strip() for row in select_rows]
     if not select_datasets:
         print(f"ERROR: {args.select_datasets_file} lists no dataset ids")
         sys.exit(1)
+
+    # Source h5ad URL per dataset: column 2 of the select file, else <id>_source.txt written by
+    # getEmbeddingfromS3.py. Both must agree, every dataset must have one, and the result is
+    # written to <results_dir>/dataset_ids.tsv as the atlas's record of where its data came from.
+    listed = {row[0].strip(): row[1].strip() for row in select_rows if len(row) > 1 and row[1].strip()}
+    source_urls, problems = {}, []
+    for ds_id in select_datasets:
+        recorded = None
+        for sdir in data_dirs:
+            src_path = os.path.join(sdir, f"{ds_id}_source.txt")
+            if os.path.exists(src_path):
+                with open(src_path) as f:
+                    recorded = f.read().strip()
+                if recorded == "unknown":
+                    recorded = None
+                break
+        if listed.get(ds_id) and recorded and listed[ds_id] != recorded:
+            problems.append(f"{ds_id}: select file says {listed[ds_id]}, {src_path} says {recorded}")
+        elif not (listed.get(ds_id) or recorded):
+            problems.append(f"{ds_id}: no source URL in {args.select_datasets_file} or <id>_source.txt")
+        else:
+            source_urls[ds_id] = listed.get(ds_id) or recorded
+    if problems:
+        print("ERROR: source h5ad URL missing or conflicting (add it as column 2 of the select file):")
+        for msg in problems:
+            print(f"  {msg}")
+        sys.exit(1)
+    dataset_ids_out = os.path.join(results_dir, "dataset_ids.tsv")
+    with open(dataset_ids_out, "w") as f:
+        for ds_id in select_datasets:
+            f.write(f"{ds_id}\t{source_urls[ds_id]}\n")
+    print(f"Source URLs for {len(select_datasets)} datasets written to {dataset_ids_out}")
 
 obs_outfile = "obs.tsv.gz"
 

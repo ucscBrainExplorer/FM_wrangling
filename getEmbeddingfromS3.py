@@ -71,6 +71,18 @@ def saveSCimilarity (adata, prefix_id, results_dir):
     np.save(os.path.join(results_dir, f'{prefix_id}_scimilarity.npy'), scimilarity_df)
     adata.obs.to_csv(os.path.join(results_dir, f'{prefix_id}_obs.tsv.gz'), sep='\t', compression='gzip')
     
+def saveSource(prefix_id, results_dir, sources):
+    """Write <id>_source.txt: the source h5ad URL the embedding was run on (uns['source_url'],
+    set by RunFoundationModelNRP/fixed_pipeline.py), or "unknown" if any chunk predates it."""
+    known = {s for s in sources if s}
+    if len(known) > 1:
+        raise ValueError(f"{prefix_id}: chunks were embedded from different source h5ads: {sorted(known)}")
+    url = known.pop() if known and all(sources) else "unknown"
+    if known and url == "unknown":
+        warnings.warn(f"{prefix_id}: some chunks have no source_url; writing 'unknown'")
+    with open(os.path.join(results_dir, f'{prefix_id}_source.txt'), 'w') as f:
+        f.write(url + "\n")
+
 def result_exists(prefix_id, results_dir, embedding):
     if os.path.exists(os.path.join(results_dir, f'{prefix_id}_{embedding}.npy')):
         return True
@@ -101,14 +113,15 @@ class S3File(io.RawIOBase):
         return len(data)
 
 def read_from_s3(profile, bucket, key):
-    """Read only obs and obsm[obsm_key] of an .h5ad on S3 (~40 MB of a ~950 MB
-    file; X is never fetched). Returns an in-memory AnnData with just those."""
+    """Read only obs, obsm[obsm_key] and uns['source_url'] of an .h5ad on S3 (~40 MB of a
+    ~950 MB file; X is never fetched). Returns an in-memory AnnData with just those."""
     s3 = boto3.Session(profile_name=profile).client("s3")
     raw = io.BufferedReader(S3File(s3, bucket, key), buffer_size=4 << 20)
     with h5py.File(raw, "r") as f:
         x = f["obsm"][obsm_key][:]
         obs = read_elem(f["obs"])
-    return ad.AnnData(obs=obs, obsm={obsm_key: x})
+        uns = {"source_url": str(read_elem(f["uns/source_url"]))} if "uns/source_url" in f else {}
+    return ad.AnnData(obs=obs, obsm={obsm_key: x}, uns=uns)
 
 def get_NRP_h5ad_filenames():
     result=[]
@@ -225,6 +238,7 @@ def process_files_via_h5 (
     dset = None
     col_order = None
     start = 0
+    sources = []
 
     for file in files:
         print("Processing", start, file)
@@ -233,6 +247,10 @@ def process_files_via_h5 (
         t0 = time.perf_counter()
         adata = read_from_s3(profile, bucket, f"{bucket_prefix}{file}")
         x = np.array(adata.obsm[obsm_key])  # (n_cells, n_features)
+        sources.append(adata.uns.get("source_url"))
+        if len({s for s in sources if s}) > 1:
+            raise ValueError(f"{dataset_id}: {file} was embedded from {sources[-1]}, "
+                             f"earlier chunks from {next(s for s in sources if s)}")
 
         n_new, n_features = x.shape
 
@@ -297,6 +315,7 @@ def process_files_via_h5 (
             mmap_array[row_start:row_end] = src[row_start:row_end]
         mmap_array.flush()
         del mmap_array
+    saveSource(dataset_id, results_dir, sources)
     print(f"Saved final NumPy array: {embedding_path_npy}")
     print(f"Saved metadata TSV: {obs_path}")
 
@@ -332,7 +351,8 @@ for file in others:
         saveUCE (adata, file_id, results_dir)
     elif embedding == "scimilarity":
         saveSCimilarity (adata, file_id, results_dir)
-    print(f"Saved as {results_dir}/{file_id}_{embedding}.npy and _obs.tsv")
+    saveSource(file_id, results_dir, [adata.uns.get("source_url")])
+    print(f"Saved as {results_dir}/{file_id}_{embedding}.npy, _obs.tsv and _source.txt")
 
 # for grouped files
 for dataset_id, data in grouped.items():

@@ -31,7 +31,15 @@ python3.11 FM_wrangling/combineEmbedding.py \
     --shuffle
 ```
 
-- `dataset_ids.tsv` — one dataset ID per line (matching npy filenames in `UCE_npy_obs/`)
+- `dataset_ids.tsv` — one dataset per line, two tab-separated columns, no header: dataset ID (matching npy filenames in
+  `UCE_npy_obs/`) and the exact source h5ad URL the embedding was run on (`s3://…` or `https://…`), e.g.
+  `8e10f1c4-8e98-41e5-b65f-8cd89a887122<TAB>s3://cellxgene-census-public-us-west-2/cell-census/2025-11-17/h5ads/8e10f1c4-8e98-41e5-b65f-8cd89a887122.h5ad`.
+  The URL is recorded automatically: `RunFoundationModelNRP/fixed_pipeline.py` stores it in each output h5ad as
+  `uns["source_url"]`, `getEmbeddingfromS3.py` writes it to `<id>_source.txt` next to the npy, and `combineEmbedding.py`
+  takes it from there when column 2 is empty, stops if a URL is missing or the two disagree, and writes the filled-in
+  file to `<ATLAS_DIR>/dataset_ids.tsv`. Datasets embedded before this have `_source.txt` = `unknown` (or none), so
+  give their URL in column 2, with its release date, never "latest". `0_annotate_obs.ipynb` takes the URLs for
+  `metadata_summary.json` from this file and stops if any dataset is missing one.
 - `--shuffle` writes a new `shuffle_index.npy` and shuffles `uce.h5` and `obs.tsv.gz` in sync
 - Verify output: cell count matches expectation, `obs.tsv.gz` contains expected columns
 
