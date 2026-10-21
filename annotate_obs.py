@@ -6,7 +6,7 @@ Run from the directory above FM_wrangling (it reads datasetLists/ and .env by re
 Reads   <ATLAS_DIR>/obs.tsv.gz, <ATLAS_DIR>/dataset_ids.tsv (dataset_id <tab> source h5ad URL),
         datasetLists/{ucsc_datasets.txt, manual_column.json, datasets.info.cxg.<date>.txt}, and the
         manually filled fields (reference_name, reference_uuid, ...) of an existing metadata_summary.json
-Writes  obs_custom_annotated.tsv.gz, metadata_summary.json, wrangling_notes_annotation.txt and the two
+Writes  obs_annotated.tsv.gz, metadata_summary.json, wrangling_notes_annotation.txt and the two
         system_prompt_*.txt files, into --output_dir (default: --data_dir)
 Needs   OPENAI_API_KEY (in .env): organism and age bucket are normalized with gpt-4.1
 """
@@ -32,7 +32,7 @@ data_dir = args.data_dir
 output_dir = args.output_dir or data_dir
 os.makedirs(output_dir, exist_ok=True)
 metadata_file = os.path.join(data_dir, "obs.tsv.gz")
-metadata_annotated_file = os.path.join(output_dir, "obs_custom_annotated.tsv.gz")
+metadata_annotated_file = os.path.join(output_dir, "obs_annotated.tsv.gz")
 existing_summary_file = os.path.join(data_dir, "metadata_summary.json")  # source of the manually filled fields
 metadata_summary_file = os.path.join(output_dir, "metadata_summary.json")
 wrangling_notes_file = os.path.join(output_dir, "wrangling_notes_annotation.txt")
@@ -73,6 +73,11 @@ def to_json_safe(obj: Any, **json_kwargs) -> str:
 
     safe_obj = normalize(obj)
     return json.dumps(safe_obj, allow_nan=False, **json_kwargs)
+
+def values_changed(before, after):
+    """True if any value differs, counting missing == missing as unchanged."""
+    before, after = before.astype(object), after.astype(object)
+    return bool((~((before == after) | (before.isna() & after.isna()))).any())
 
 # ---------- load metadata ----------
 meta_data = pd.read_csv(metadata_file, sep ='\t')
@@ -116,6 +121,8 @@ note_map = {
 }
 
 has_dataset_id = "dataset_id" in meta_data.columns
+# combineEmbedding.py already adds these; note them here only if they were missing or change
+pub_before = {c: meta_data[c].copy() for c in ann_columns if c in meta_data.columns}
 
 # annotate with publication information only if dataset_id is available
 if has_dataset_id:
@@ -163,6 +170,14 @@ if has_dataset_id:
         fwrangle.write(f"{uri}\n")
         fwrangle.flush()
 
+# Notes in data-flow order: download, then the combine step, then this script's annotation
+if os.path.exists(wrangling_notes_combineEmbedding_file):
+    with open(wrangling_notes_combineEmbedding_file) as f:
+        fwrangle.write("\nNotes from the combine step (combineEmbedding.py)\n")
+        fwrangle.write(f.read())
+fwrangle.write("\nNotes from the annotation step (annotate_obs.py)\n")
+fwrangle.flush()
+
 # publication metadata
 publication_summary = []
 
@@ -187,14 +202,15 @@ for (label, doi), group in raw_pub_summary.groupby(
     })
 
 # add wrangling notes
-note = "Combine .obs fields from source h5ad files"
-fwrangle.write(f"{note}\n")
-fwrangle.flush()
-
-for column in ann_columns:
-    note = f"Add column '{column}', populate with {note_map[column]} from source data"
-    fwrangle.write(f"{note}\n")
-    fwrangle.flush()
+if has_dataset_id:
+    pub_changed = [c for c in ann_columns if c not in pub_before or values_changed(pub_before[c], meta_data[c])]
+    if pub_changed:
+        note = "Combine .obs fields from source h5ad files"
+        fwrangle.write(f"{note}\n")
+        for column in pub_changed:
+            note = f"Add column '{column}', populate with {note_map[column]} from source data"
+            fwrangle.write(f"{note}\n")
+        fwrangle.flush()
 
 # ---------- custom information in manual_column.json (custom_map) ----------
 # custum column information such as cell_type or filling in missing columns using static values
@@ -210,6 +226,7 @@ if not has_dataset_id:
     print("No dataset_id column — skipping custom_map overrides")
 else:
     dataset_ids_data = set(meta_data["dataset_id"].unique())
+    rules_already_applied = 0  # rules whose result is already in obs (applied by combineEmbedding.py)
     for dataset_id_from_map, cfg in custom_map.items():
         if dataset_id_from_map not in dataset_ids_data:
             continue
@@ -225,7 +242,11 @@ else:
             dataset_title = dataset_info[dataset_id_from_map]["dataset_title"]
 
             if data_type == "static":
+                before = meta_data.loc[mask, metadata_param].copy() if metadata_param in meta_data.columns else None
                 meta_data.loc[mask, metadata_param] = value
+                if before is not None and not values_changed(before, meta_data.loc[mask, metadata_param]):
+                    rules_already_applied += 1
+                    continue
                 note = (
                     f"Set '{metadata_param}' = '{value}' for dataset '{dataset_id_from_map}' "
                     f"'{collection_doi_label}' '{dataset_title}'"
@@ -239,14 +260,19 @@ else:
                 # combineEmbedding.py applies these rules while building the atlas, then keeps only the
                 # selected obs columns, so the source column may be gone; the target is already filled.
                 if source_col not in meta_data.columns:
+                    if new_column in meta_data.columns and meta_data.loc[mask, new_column].notna().all():
+                        rules_already_applied += 1
+                        continue
                     skip_note = (
-                        f"Skipped mapping '{source_col}' -> '{new_column}' for dataset '{dataset_id_from_map}' "
-                        f"'{collection_doi_label}' '{dataset_title}': source column '{source_col}' not in obs"
+                        f"WARNING: could not map '{source_col}' -> '{new_column}' for dataset '{dataset_id_from_map}' "
+                        f"'{collection_doi_label}' '{dataset_title}': source column '{source_col}' not in obs "
+                        f"and '{new_column}' is not filled"
                     )
                     fwrangle.write(f"{skip_note}\n")
                     fwrangle.flush()
                     print(skip_note)
                     continue
+                before = meta_data.loc[mask, new_column].copy() if new_column in meta_data.columns else None
                 if new_column not in meta_data.columns:
                     meta_data[new_column] = None
                     default_note = f"Initialized '{new_column}' from '{metadata_param}'"
@@ -255,6 +281,9 @@ else:
                     print(default_note)
 
                 meta_data.loc[mask, new_column] = meta_data.loc[mask, source_col]
+                if before is not None and not values_changed(before, meta_data.loc[mask, new_column]):
+                    rules_already_applied += 1
+                    continue
                 custom_note = (
                     f"Map column '{source_col}' -> '{new_column}' "
                     f"for dataset '{dataset_id_from_map}' '{collection_doi_label}' '{dataset_title}'"
@@ -269,14 +298,19 @@ else:
                 source_col = value
                 value_map = param_cfg.get("map") or {}
                 if source_col not in meta_data.columns:
+                    if new_column in meta_data.columns and meta_data.loc[mask, new_column].notna().all():
+                        rules_already_applied += 1
+                        continue
                     skip_note = (
-                        f"Skipped value map '{source_col}' -> '{new_column}' for dataset '{dataset_id_from_map}' "
-                        f"'{collection_doi_label}' '{dataset_title}': source column '{source_col}' not in obs"
+                        f"WARNING: could not apply value map '{source_col}' -> '{new_column}' for dataset "
+                        f"'{dataset_id_from_map}' '{collection_doi_label}' '{dataset_title}': source column "
+                        f"'{source_col}' not in obs and '{new_column}' is not filled"
                     )
                     fwrangle.write(f"{skip_note}\n")
                     fwrangle.flush()
                     print(skip_note)
                     continue
+                before = meta_data.loc[mask, new_column].copy() if new_column in meta_data.columns else None
                 if new_column not in meta_data.columns:
                     meta_data[new_column] = None
 
@@ -285,6 +319,9 @@ else:
                 unmapped = sorted(str(v) for v in src[~hit & src.notna()].unique())
                 translated = src.map(value_map).where(hit, src)
                 meta_data.loc[mask, new_column] = translated.where(translated.notna(), np.nan)  # null -> NaN, not None
+                if before is not None and not values_changed(before, meta_data.loc[mask, new_column]):
+                    rules_already_applied += 1
+                    continue
                 custom_note = (
                     f"Map column '{source_col}' -> '{new_column}' via value map "
                     + ", ".join(f"'{k}'->" + ("NaN" if v is None else f"'{v}'") for k, v in value_map.items())
@@ -297,6 +334,13 @@ else:
                 fwrangle.write(f"{custom_note}\n")
                 fwrangle.flush()
                 print(custom_note)
+
+    if rules_already_applied:
+        note = (f"{rules_already_applied} manual_column.json rules were already applied in the combine step "
+                f"(no change; see the combine notes above)")
+        fwrangle.write(f"{note}\n")
+        fwrangle.flush()
+        print(note)
 
 # ---------- normalized organism information (add column "normalized_organism") ----------
 system_prompt = """
@@ -837,13 +881,6 @@ if os.path.exists(mapped_doc_file):
         fwrangle.write(f.read())
 fwrangle.flush()
 
-# if there is wrangling_notes_combineEmbedding_file, add at the end
-if os.path.exists(wrangling_notes_combineEmbedding_file):
-    with open(wrangling_notes_combineEmbedding_file) as f:
-        fwrangle.write("\nCell label harmonization performed\n")
-        fwrangle.write(f.read())
-fwrangle.flush()
-
 # if there is wrangling_notes_custom_file, add at the end
 if os.path.exists(wrangling_notes_custom_file):
     with open(wrangling_notes_custom_file) as f:
@@ -861,6 +898,6 @@ print(f"Wrote {metadata_summary_file}")
 fwrangle.close()
 print(f"Wrote {wrangling_notes_file}")
 
-# ---------- output obs_custom_annotated.tsv.gz ----------
+# ---------- output obs_annotated.tsv.gz ----------
 meta_data.to_csv(metadata_annotated_file, sep="\t", index=False)
 print(f"Wrote {metadata_annotated_file}")
