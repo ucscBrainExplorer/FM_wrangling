@@ -7,7 +7,7 @@ Given a set of wrangled h5ads with UCE embeddings, build a PUMAP reference atlas
 The pipeline has two phases:
 
 **Phase 1 — Build the reference** (this skill)
-1. Combine embeddings with `combineEmbedding.py --shuffle`
+1. Combine embeddings with `combineEmbedding.py --shuffle`, then annotate obs with `annotate_obs.py`
 2. PCA + KNN (run in parallel)
 3. Train PUMAP
 4. Build pyramid
@@ -38,7 +38,7 @@ python3.11 FM_wrangling/combineEmbedding.py \
   `uns["source_url"]`, `getEmbeddingfromS3.py` writes it to `<id>_source.txt` next to the npy, and `combineEmbedding.py`
   takes it from there when column 2 is empty, stops if a URL is missing or the two disagree, and writes the filled-in
   file to `<ATLAS_DIR>/dataset_ids.tsv`. Datasets embedded before this have `_source.txt` = `unknown` (or none), so
-  give their URL in column 2, with its release date, never "latest". `0_annotate_obs.ipynb` takes the URLs for
+  give their URL in column 2, with its release date, never "latest". `annotate_obs.py` takes the URLs for
   `metadata_summary.json` from this file and stops if any dataset is missing one.
 - `--shuffle` writes a new `shuffle_index.npy` and shuffles `uce.h5` and `obs.tsv.gz` in sync
 - Verify output: cell count matches expectation, `obs.tsv.gz` contains expected columns
@@ -61,6 +61,20 @@ If only one dataset needs to be shuffled (no combine step needed):
 Writes `<ATLAS_DIR>/uce.h5` (uncompressed), `obs.tsv.gz` and `shuffle_index.npy`. Obs is staged as Parquet in `--nvme-dir` (default `/nvme`) and values are kept verbatim.
 
 Use `--chunked` if RAM is constrained: RAM drops to ~32 bytes/row plus one read block, but `--nvme-dir` needs free space equal to the full uncompressed array. `--chunked` requires `.h5` input; if the source h5 has tiny chunks (e.g. `combined_UCE_56M/uce.h5`), copy it to `/nvme` first and shuffle the copy.
+
+### Annotate obs and write the metadata summary — `annotate_obs.py`
+
+Run from the same directory as `combineEmbedding.py`, after it:
+
+```bash
+python3 FM_wrangling/annotate_obs.py --data_dir <ATLAS_DIR>
+```
+
+- Reads `<ATLAS_DIR>/obs.tsv.gz` and `dataset_ids.tsv`, plus `datasetLists/` (`ucsc_datasets.txt`, `manual_column.json`, newest `datasets.info.cxg.*.txt`).
+- Writes `obs_custom_annotated.tsv.gz`, `metadata_summary.json`, `wrangling_notes_annotation.txt` and the two `system_prompt_*.txt` files.
+- Normalizes organism and development stage (age bucket) with OpenAI gpt-4.1; needs `OPENAI_API_KEY` in `.env` in the run directory. The two mappings are printed for checking.
+- Keeps the hand-filled fields of an existing `metadata_summary.json` (`reference_name`, `reference_uuid`, `version_label`, `reference_pyramid`, `foundation_model`, `abstract`); everything else is regenerated.
+- `--output_dir <DIR>` writes the outputs elsewhere (still reading the hand-filled fields from `<ATLAS_DIR>`), to compare a re-run before replacing the files.
 
 ## Step 2 — PCA and KNN (run in parallel)
 
@@ -176,12 +190,12 @@ Output: ~60 PNG tiles per feature + `metadata.json` in `target_dir`
 ### UCE brain 512 (`--embedding uce_brain_512`)
 
 - Inputs come from `UCE_brain_512_npy_obs/`; embeddings are 512-dim instead of 1280.
-- Example: `combined_UCE_5neuro_ucebrain512_shuffle/` (5 brain datasets, 7.1M cells, ~16 min with `--shuffle`):
+- Example: `combined_UCE_5neuro_ucebrain512_shuffle_7253ea1e-e5ff-4f93-80fa-c108806fc7c6/` (5 brain datasets, 7.1M cells, ~16 min with `--shuffle`):
   ```bash
   python3 FM_wrangling/combineEmbedding.py --embedding uce_brain_512 \
-      --results_dir combined_UCE_5neuro_ucebrain512_shuffle \
-      --select-datasets-file combined_UCE_5neuro_ucebrain512_shuffle/dataset_ids.tsv \
-      --obs-columns-file combined_UCE_5neuro_ucebrain512_shuffle/obs_columns_brain.txt \
+      --results_dir combined_UCE_5neuro_ucebrain512_shuffle_7253ea1e-e5ff-4f93-80fa-c108806fc7c6 \
+      --select-datasets-file combined_UCE_5neuro_ucebrain512_shuffle_7253ea1e-e5ff-4f93-80fa-c108806fc7c6/dataset_ids.tsv \
+      --obs-columns-file combined_UCE_5neuro_ucebrain512_shuffle_7253ea1e-e5ff-4f93-80fa-c108806fc7c6/obs_columns_brain.txt \
       --staging-dir /data/scratch/jzhu2 --shuffle
   ```
 - `--obs-columns-file` (select mode only) limits obs to the listed columns, in file order; without it, select mode writes the union of all columns.
