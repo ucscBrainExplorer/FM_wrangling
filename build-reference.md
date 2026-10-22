@@ -11,6 +11,7 @@ The pipeline has two phases:
 2. PCA + KNN (run in parallel)
 3. Train PUMAP
 4. Build pyramid
+5. Add the reference to data-explorer
 
 **Phase 2 — Map query data onto the reference**
 - Use `map_newdata.py` to project new datasets onto the finished reference → arrow files
@@ -176,6 +177,21 @@ pyramid_file = "pyramid_e{N}_config.json"
 The notebook auto-selects tile resolution to keep pixel loss rate <3%, builds multi-level PNG tiles for each feature, and writes `metadata.json` to `target_dir`.
 
 Output: ~60 PNG tiles per feature + `metadata.json` in `target_dir`
+
+## Step 5 — Add the reference to data-explorer — `merge_metadata_summary.py`
+
+Set `reference_pyramid` in `<ATLAS_DIR>/metadata_summary.json` to the pyramid's public URL, then merge it into the data-explorer metadata list:
+
+```bash
+python3 FM_wrangling/merge_metadata_summary.py data-explorer/UCSC_Brain_Explorer_metadata.json <ATLAS_DIR>/metadata_summary.json
+```
+
+- Matches entries by `reference_uuid`: an existing uuid is replaced whole (each field change is printed), a new uuid is appended.
+- Writes a timestamped `.bak` of the target next to it; delete it once the diff looks right.
+
+Copy the notes the site shows into `data-explorer/wrangling_notes/<reference_uuid>/`:
+- `<ATLAS_DIR>/wrangling_notes_annotation.txt` → `wrangling_notes.txt`
+- `system_prompt_normalized_age_bucket.txt` and `system_prompt_normalized_organism.txt`
 
 ---
 
