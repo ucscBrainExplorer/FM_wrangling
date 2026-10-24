@@ -5,8 +5,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     "--embedding",
     required=True,
-    choices=["uce", "uce_brain_512", "scimilarity"],
-    help="Embedding type to use (uce, uce_brain_512 or scimilarity)"
+    choices=["uce", "uce_brain_512", "uce_brain_768_bican", "scimilarity"],
+    help="Embedding type to use (uce, uce_brain_512, uce_brain_768_bican or scimilarity)"
 )
 
 args = parser.parse_args()
@@ -21,7 +21,7 @@ except ImportError:  # anndata < 0.11
     from anndata.experimental import read_elem
 import io
 import numpy as np
-import os, re, sys, time
+import os, re, sys, time, json
 import boto3
 from collections import defaultdict
 import h5py
@@ -50,6 +50,13 @@ elif embedding == "uce_brain_512":
     file_suffix = "_ucebrain512_adata.h5ad"
     obsm_key = "X_ucebrain512"
     embedding = "uce"  # output files named *_uce.npy like uce; location, suffix and obsm key differ
+elif embedding == "uce_brain_768_bican":
+    results_dir = "UCE_brain_768_bican_npy_obs"
+    duplicate_dir = "duplicate_UCE_brain_768_bican"
+    bucket_prefix = "UCE_brain_768_bican/"
+    file_suffix = "_ucebrain768bican_adata.h5ad"
+    obsm_key = "X_ucebrain768bican"
+    embedding = "uce"  # same as uce_brain_512
 elif embedding == "scimilarity":
     results_dir = "SCimilarity_npy_obs"
     duplicate_dir = "duplicate_SCimilarity"
@@ -71,23 +78,93 @@ def saveSCimilarity (adata, prefix_id, results_dir):
     np.save(os.path.join(results_dir, f'{prefix_id}_scimilarity.npy'), scimilarity_df)
     adata.obs.to_csv(os.path.join(results_dir, f'{prefix_id}_obs.tsv.gz'), sep='\t', compression='gzip')
     
-def saveSource(prefix_id, results_dir, sources):
-    """Write <id>_source.txt: the source h5ad URL the embedding was run on (uns['source_url'],
-    set by RunFoundationModelNRP/fixed_pipeline.py), or "unknown" if any chunk predates it."""
+PER_CHUNK_PROVENANCE = ("pipeline_git_commit", "bf16")
+
+def model_provenance(uns):
+    """uns['<method>_provenance'] without the fields that legitimately vary per chunk"""
+    return {k: {kk: vv for kk, vv in v.items() if kk not in PER_CHUNK_PROVENANCE}
+            for k, v in uns.items() if k.endswith("_provenance")}
+
+def check_chunk_provenance(prefix_id, file, uns, first_uns):
+    """Stop on a chunk whose provenance can't be trusted or disagrees with the dataset's first
+    chunk. Chunks predating these uns fields (no source_verified / *_provenance) pass."""
+    if uns.get("source_verified") is False:
+        raise ValueError(f"{prefix_id}: {file} has source_verified=False, so its source_url "
+                         f"{uns.get('source_url')} is only what dataset_ids.txt named, not a "
+                         f"record of what was staged; re-embed it from a recorded source")
+    if first_uns is None:
+        return
+    a, b = first_uns.get("source_url"), uns.get("source_url")
+    if a and b and a != b:
+        raise ValueError(f"{prefix_id}: {file} was embedded from {b}, earlier chunks from {a}")
+    # same model for every chunk; the pipeline commit may differ between reruns, and bf16
+    # with the GPU the job landed on (bf16 and fp32 embeddings are almost identical)
+    if model_provenance(uns) != model_provenance(first_uns):
+        raise ValueError(f"{prefix_id}: {file} was embedded with {model_provenance(uns)}, "
+                         f"earlier chunks with {model_provenance(first_uns)}")
+
+NAN_CHUNK_MAX_FRAC = 0.01
+
+def nan_check(file, x):
+    """A chunk with more than NAN_CHUNK_MAX_FRAC NaN embedding rows is a failed embedding run:
+    in the uce-brain 768 build, 8 chunks came back 61-90% all-NaN while every other chunk had
+    none. Report it so the chunk can be re-embedded. A few NaN rows are single cells the model
+    could not embed; they are only printed, and combineEmbedding.py drops them."""
+    n_nan = int(np.isnan(x).any(axis=1).sum())
+    if n_nan == 0:
+        return None
+    frac = n_nan / x.shape[0]
+    print(f"  NaN: {n_nan:,} / {x.shape[0]:,} rows ({frac:.2%}) in {file}"
+          + ("" if frac > NAN_CHUNK_MAX_FRAC else "; under the failed-chunk cutoff, dropped at combine"))
+    if frac <= NAN_CHUNK_MAX_FRAC:
+        return None
+    return {"file": file, "nan_rows": n_nan, "n_cells": int(x.shape[0])}
+
+nan_datasets = {}  # dataset -> chunks with NaN rows, reported at the end of the run
+
+def saveSource(prefix_id, results_dir, unses, nan_chunks=()):
+    """Write <id>_provenance.json: the source h5ad URL the embedding was run on (uns['source_url'],
+    set by RunFoundationModelNRP/fixed_pipeline.py, or "unknown" if any chunk predates it),
+    whether the pipeline verified it, the pipeline
+    commits, the model provenance (uns['<method>_provenance']) of the chunks and any chunks
+    with NaN embedding rows."""
+    sources = [u.get("source_url") for u in unses]
     known = {s for s in sources if s}
     if len(known) > 1:
         raise ValueError(f"{prefix_id}: chunks were embedded from different source h5ads: {sorted(known)}")
     url = known.pop() if known and all(sources) else "unknown"
     if known and url == "unknown":
         warnings.warn(f"{prefix_id}: some chunks have no source_url; writing 'unknown'")
-    with open(os.path.join(results_dir, f'{prefix_id}_source.txt'), 'w') as f:
-        f.write(url + "\n")
+
+    verified = [u.get("source_verified") for u in unses]
+    bf16 = [v.get("bf16") for u in unses for k, v in u.items() if k.endswith("_provenance")]
+    provenance = {
+        "source_url": url,
+        # True only if every chunk's pipeline confirmed the staged copy came from source_url
+        "source_verified": all(v is True for v in verified) if None not in verified else None,
+        "pipeline_git_commits": sorted({u.get("pipeline_git_commit") or "unknown" for u in unses}),
+        "n_chunks": len(unses),
+        **({"bf16_chunks": bf16.count(True), "fp32_chunks": bf16.count(False)} if bf16 else {}),
+        **model_provenance(unses[0]),
+        "nan_chunks": list(nan_chunks),
+    }
+    if nan_chunks:
+        nan_datasets[prefix_id] = list(nan_chunks)
+    with open(os.path.join(results_dir, f'{prefix_id}_provenance.json'), 'w') as f:
+        json.dump(provenance, f, indent=2)
+        f.write("\n")
 
 def result_exists(prefix_id, results_dir, embedding):
-    if os.path.exists(os.path.join(results_dir, f'{prefix_id}_{embedding}.npy')):
-        return True
-    else:
+    if not os.path.exists(os.path.join(results_dir, f'{prefix_id}_{embedding}.npy')):
         return False
+    # a result with NaN chunks is downloaded again, so re-embedded chunks get picked up
+    prov_path = os.path.join(results_dir, f'{prefix_id}_provenance.json')
+    if os.path.exists(prov_path):
+        with open(prov_path) as f:
+            if json.load(f).get("nan_chunks"):
+                print(f"{prefix_id}: earlier download had NaN chunks; downloading again")
+                return False
+    return True
 
 class S3File(io.RawIOBase):
     """Read-only, seekable file object over an S3 object using ranged GETs,
@@ -112,15 +189,25 @@ class S3File(io.RawIOBase):
         self.pos += len(data)
         return len(data)
 
+def _plain(v):
+    """numpy scalars/bytes from read_elem -> JSON-serializable Python values"""
+    if isinstance(v, dict):
+        return {k: _plain(x) for k, x in v.items()}
+    if isinstance(v, bytes):
+        return v.decode()
+    return v.item() if hasattr(v, "item") else v
+
 def read_from_s3(profile, bucket, key):
-    """Read only obs, obsm[obsm_key] and uns['source_url'] of an .h5ad on S3 (~40 MB of a
-    ~950 MB file; X is never fetched). Returns an in-memory AnnData with just those."""
+    """Read only obs, obsm[obsm_key] and the provenance in uns (source_url, source_verified,
+    pipeline_git_commit, <method>_provenance) of an .h5ad on S3 (~40 MB of a ~950 MB file;
+    X is never fetched). Returns an in-memory AnnData with just those."""
     s3 = boto3.Session(profile_name=profile).client("s3")
     raw = io.BufferedReader(S3File(s3, bucket, key), buffer_size=4 << 20)
     with h5py.File(raw, "r") as f:
         x = f["obsm"][obsm_key][:]
         obs = read_elem(f["obs"])
-        uns = {"source_url": str(read_elem(f["uns/source_url"]))} if "uns/source_url" in f else {}
+        uns = {k: _plain(read_elem(f["uns"][k])) for k in f["uns"].keys()
+               if k in ("source_url", "source_verified", "pipeline_git_commit") or k.endswith("_provenance")}
     return ad.AnnData(obs=obs, obsm={obsm_key: x}, uns=uns)
 
 def get_NRP_h5ad_filenames():
@@ -238,7 +325,8 @@ def process_files_via_h5 (
     dset = None
     col_order = None
     start = 0
-    sources = []
+    unses = []
+    nan_chunks = []
 
     for file in files:
         print("Processing", start, file)
@@ -247,10 +335,11 @@ def process_files_via_h5 (
         t0 = time.perf_counter()
         adata = read_from_s3(profile, bucket, f"{bucket_prefix}{file}")
         x = np.array(adata.obsm[obsm_key])  # (n_cells, n_features)
-        sources.append(adata.uns.get("source_url"))
-        if len({s for s in sources if s}) > 1:
-            raise ValueError(f"{dataset_id}: {file} was embedded from {sources[-1]}, "
-                             f"earlier chunks from {next(s for s in sources if s)}")
+        check_chunk_provenance(dataset_id, file, adata.uns, unses[0] if unses else None)
+        unses.append(dict(adata.uns))
+        bad = nan_check(file, x)
+        if bad:
+            nan_chunks.append(bad)
 
         n_new, n_features = x.shape
 
@@ -315,7 +404,7 @@ def process_files_via_h5 (
             mmap_array[row_start:row_end] = src[row_start:row_end]
         mmap_array.flush()
         del mmap_array
-    saveSource(dataset_id, results_dir, sources)
+    saveSource(dataset_id, results_dir, unses, nan_chunks)
     print(f"Saved final NumPy array: {embedding_path_npy}")
     print(f"Saved metadata TSV: {obs_path}")
 
@@ -351,8 +440,10 @@ for file in others:
         saveUCE (adata, file_id, results_dir)
     elif embedding == "scimilarity":
         saveSCimilarity (adata, file_id, results_dir)
-    saveSource(file_id, results_dir, [adata.uns.get("source_url")])
-    print(f"Saved as {results_dir}/{file_id}_{embedding}.npy, _obs.tsv and _source.txt")
+    check_chunk_provenance(file_id, file, adata.uns, None)
+    bad = nan_check(file, np.asarray(adata.obsm[obsm_key]))
+    saveSource(file_id, results_dir, [dict(adata.uns)], [bad] if bad else [])
+    print(f"Saved as {results_dir}/{file_id}_{embedding}.npy, _obs.tsv and _provenance.json")
 
 # for grouped files
 for dataset_id, data in grouped.items():
@@ -379,3 +470,10 @@ for dataset_id, data in grouped.items():
     
     print(f"Saved as {results_dir}/{dataset_id}_{embedding}.npy and _obs.tsv")
 
+if nan_datasets:
+    print(f"ERROR: chunks with NaN embedding rows (re-embed them, then rerun; these datasets are "
+          f"downloaded again automatically):")
+    for ds, chunks in nan_datasets.items():
+        for c in chunks:
+            print(f"  {ds}: {c['file']}  {c['nan_rows']:,} / {c['n_cells']:,} rows NaN")
+    sys.exit(1)

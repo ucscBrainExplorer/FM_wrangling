@@ -4,8 +4,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     "--embedding",
     required=True,
-    choices=["uce", "uce_brain_512", "scimilarity"],
-    help="Embedding type to use (uce, uce_brain_512 or scimilarity)"
+    choices=["uce", "uce_brain_512", "uce_brain_768_bican", "scimilarity"],
+    help="Embedding type to use (uce, uce_brain_512, uce_brain_768_bican or scimilarity)"
 )
 
 parser.add_argument(
@@ -18,7 +18,7 @@ parser.add_argument(
     "--select-datasets-file",
     default=None,
     help="File of datasets to process, one per line: dataset ID, then optionally <tab> source h5ad URL "
-         "(else taken from <id>_source.txt); the URLs are written to <results_dir>/dataset_ids.tsv"
+         "(else taken from source_url in <id>_provenance.json); the URLs are written to <results_dir>/dataset_ids.tsv"
 )
 parser.add_argument(
     "--obs-columns-file",
@@ -52,7 +52,7 @@ parser.add_argument(
 
 args = parser.parse_args()
 
-import os, sys, re, glob
+import os, sys, re, glob, json
 
 if args.shuffle and (args.obs_only or args.uce_only):
     print("ERROR: --shuffle cannot be used with --obs-only or --uce-only — obs and uce must be written together to stay in sync.")
@@ -144,6 +144,12 @@ elif embedding == "uce_brain_512":
     dup_dir = "duplicate_UCE_brain_512"
     n_cols = 512
     embedding = "uce"  # input files named *_uce.npy like uce; location and width differ
+elif embedding == "uce_brain_768_bican":
+    embedding_outfile = "uce.h5"
+    data_dirs =["UCE_brain_768_bican_npy_obs", "duplicate_UCE_brain_768_bican"]
+    dup_dir = "duplicate_UCE_brain_768_bican"
+    n_cols = 768
+    embedding = "uce"  # same as uce_brain_512
 elif embedding == "scimilarity":
     embedding_outfile = "scimilarity.h5"
     data_dirs =["SCimilarity_npy_obs", "duplicate_SCimilarity"]
@@ -163,7 +169,7 @@ if args.select_datasets_file:
         print(f"ERROR: {args.select_datasets_file} lists no dataset ids")
         sys.exit(1)
 
-    # Source h5ad URL per dataset: column 2 of the select file, else <id>_source.txt written by
+    # Source h5ad URL per dataset: column 2 of the select file, else source_url in <id>_provenance.json written by
     # getEmbeddingfromS3.py. Both must agree, every dataset must have one, and the result is
     # written to <results_dir>/dataset_ids.tsv as the atlas's record of where its data came from.
     listed = {row[0].strip(): row[1].strip() for row in select_rows if len(row) > 1 and row[1].strip()}
@@ -171,17 +177,17 @@ if args.select_datasets_file:
     for ds_id in select_datasets:
         recorded = None
         for sdir in data_dirs:
-            src_path = os.path.join(sdir, f"{ds_id}_source.txt")
+            src_path = os.path.join(sdir, f"{ds_id}_provenance.json")
             if os.path.exists(src_path):
                 with open(src_path) as f:
-                    recorded = f.read().strip()
+                    recorded = json.load(f).get("source_url")
                 if recorded == "unknown":
                     recorded = None
                 break
         if listed.get(ds_id) and recorded and listed[ds_id] != recorded:
             problems.append(f"{ds_id}: select file says {listed[ds_id]}, {src_path} says {recorded}")
         elif not (listed.get(ds_id) or recorded):
-            problems.append(f"{ds_id}: no source URL in {args.select_datasets_file} or <id>_source.txt")
+            problems.append(f"{ds_id}: no source URL in {args.select_datasets_file} or <id>_provenance.json")
         else:
             source_urls[ds_id] = listed.get(ds_id) or recorded
     if problems:
@@ -194,6 +200,42 @@ if args.select_datasets_file:
         for ds_id in select_datasets:
             f.write(f"{ds_id}\t{source_urls[ds_id]}\n")
     print(f"Source URLs for {len(select_datasets)} datasets written to {dataset_ids_out}")
+
+    # Per-dataset provenance from <id>_provenance.json (getEmbeddingfromS3.py): whether the
+    # source URL was verified, pipeline commits and model provenance. null for datasets
+    # downloaded before those files existed.
+    provenance = {}
+    for ds_id in select_datasets:
+        provenance[ds_id] = None
+        for sdir in data_dirs:
+            prov_path = os.path.join(sdir, f"{ds_id}_provenance.json")
+            if os.path.exists(prov_path):
+                with open(prov_path) as f:
+                    provenance[ds_id] = json.load(f)
+                break
+    nan = [(ds_id, c) for ds_id, p in provenance.items() if p for c in p.get("nan_chunks", [])]
+    if nan:
+        print("ERROR: chunks with NaN embedding rows (re-embed them and rerun getEmbeddingfromS3.py):")
+        for ds_id, c in nan:
+            print(f"  {ds_id}: {c['file']}  {c['nan_rows']:,} / {c['n_cells']:,} rows NaN")
+        sys.exit(1)
+    missing = [ds_id for ds_id, p in provenance.items() if p is None]
+    if missing:
+        print(f"WARNING: no <id>_provenance.json for {len(missing)} datasets (downloaded before "
+              f"getEmbeddingfromS3.py wrote them): {', '.join(missing)}")
+    # every dataset should come from the same model; differing commits may still be harmless
+    # (_provenance.json already leaves out the per-chunk pipeline commit and bf16)
+    models = {json.dumps({k: v for k, v in p.items() if k.endswith("_provenance")}, sort_keys=True)
+              for p in provenance.values() if p}
+    if len(models) > 1:
+        print("WARNING: datasets were embedded with different model provenance:")
+        for m in sorted(models):
+            print(f"  {m}")
+    provenance_out = os.path.join(results_dir, "dataset_provenance.json")
+    with open(provenance_out, "w") as f:
+        json.dump(provenance, f, indent=2)
+        f.write("\n")
+    print(f"Provenance for {len(select_datasets)} datasets written to {provenance_out}")
 
 obs_outfile = "obs.tsv.gz"
 
@@ -235,6 +277,7 @@ dataset_list = []
 dataset_collection_info = []              # (real_dataset_id, collection_doi, collection_doi_label, dataset_title)
                                           #   for the wrangling notes — actual values, not a generic description
 cellCount = 0
+nan_dropped_total = 0  # primary cells dropped for NaN embeddings; prescan counts them
 remapfile_exist_datasets = []             # (real_dataset_id, dataset_id, mapped_filepath, doc_filepath)
                                           #   remap file (_remap.tsv + _obs_mapped.tsv.gz) found — UCSC mapped obs merged in as-is
 arr_dtype = np.dtype('float32')
@@ -520,7 +563,6 @@ manual_rules = {}                         # real_dataset_id -> [(target, type, v
 manual_rule_notes = []                    # lines for the wrangling notes
 manual_map_unmapped = {}                  # (real_dataset_id, target, source) -> set of unmapped values
 if not uce_only:
-    import json
     # real ids of the selected datasets, derived the same way as real_dataset_id below
     selected_real_ids = set()
     for _sid in select_datasets:
@@ -691,6 +733,7 @@ for singleDir in data_dirs:
             chunk_iter = _zip_strict_chunks(uce_raw.shape[0], CHUNK, obs_reader, mapped_reader, dataset_id)
 
             any_written = False
+            nan_dropped = 0
             for uce_start, obs_chunk, mapped_chunk in chunk_iter:
                 uce_end   = min(uce_start + CHUNK, uce_raw.shape[0])
                 uce_chunk = np.array(uce_raw[uce_start:uce_end])
@@ -705,6 +748,7 @@ for singleDir in data_dirs:
                     mask_primary = np.ones(len(uce_chunk), dtype=bool)
 
                 combined_mask = mask_uce & mask_primary
+                nan_dropped += int((~mask_uce & mask_primary).sum())
                 if combined_mask.sum() == 0:
                     continue
 
@@ -771,6 +815,9 @@ for singleDir in data_dirs:
                         dset_uce[-uce_filtered.shape[0]:] = uce_filtered
 
             del uce_raw
+            if nan_dropped:
+                nan_dropped_total += nan_dropped
+                print(f"  {real_dataset_id}: dropped {nan_dropped:,} cells with NaN embeddings")
             if any_written:
                 counter += 1
                 print(counter, "total cell count:", cellCount)
@@ -786,7 +833,9 @@ if not obs_only and not shuffle:
 
 if shuffle and not obs_only:
     actual_total = uce_write_pos
-    assert actual_total == prescan_total, f"Cell count mismatch: prescan={prescan_total}, actual={actual_total}"
+    print(f"Cells dropped for NaN embeddings: {nan_dropped_total:,}")
+    assert actual_total + nan_dropped_total == prescan_total, \
+        f"Cell count mismatch: prescan={prescan_total}, actual={actual_total}, NaN-dropped={nan_dropped_total}"
     print(f"Generating shuffle index ({actual_total} cells)...")
     shuffle_idx = np.random.permutation(actual_total)
     shuffle_idx_path = os.path.join(results_dir, "shuffle_index.uce.npy")

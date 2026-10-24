@@ -36,9 +36,9 @@ python3.11 FM_wrangling/combineEmbedding.py \
   `UCE_npy_obs/`) and the exact source h5ad URL the embedding was run on (`s3://…` or `https://…`), e.g.
   `8e10f1c4-8e98-41e5-b65f-8cd89a887122<TAB>s3://cellxgene-census-public-us-west-2/cell-census/2025-11-17/h5ads/8e10f1c4-8e98-41e5-b65f-8cd89a887122.h5ad`.
   The URL is recorded automatically: `RunFoundationModelNRP/fixed_pipeline.py` stores it in each output h5ad as
-  `uns["source_url"]`, `getEmbeddingfromS3.py` writes it to `<id>_source.txt` next to the npy, and `combineEmbedding.py`
+  `uns["source_url"]`, `getEmbeddingfromS3.py` writes it as `source_url` in `<id>_provenance.json` next to the npy, and `combineEmbedding.py`
   takes it from there when column 2 is empty, stops if a URL is missing or the two disagree, and writes the filled-in
-  file to `<ATLAS_DIR>/dataset_ids.tsv`. Datasets embedded before this have `_source.txt` = `unknown` (or none), so
+  file to `<ATLAS_DIR>/dataset_ids.tsv`. Datasets embedded before this have `source_url` = `unknown` (or no `_provenance.json`), so
   give their URL in column 2, with its release date, never "latest". `annotate_obs.py` takes the URLs for
   `metadata_summary.json` from this file and stops if any dataset is missing one.
 - `--shuffle` writes a new `shuffle_index.npy` and shuffles `uce.h5` and `obs.tsv.gz` in sync
@@ -218,6 +218,20 @@ Copy the notes the site shows into `data-explorer/wrangling_notes/<reference_uui
 - `datasetLists/manual_column.json` applies in both modes; rule types `static`, `column` and `map` (value translation, `null` = empty), each with an optional `note` that is copied into `wrangling_notes_combineEmbedding.txt`.
 - KNN: use `--index_type ivfflat` or `ivfpq_128`; `ivfpq_320` fails because 512 is not divisible by 320.
 - PCA/PUMAP models trained on 1280-dim UCE do not apply; retrain on the 512-dim `uce.h5`, and map only query data embedded with the same UCE brain model.
+
+### UCE brain 768 BICAN (`--embedding uce_brain_768_bican`)
+
+- Same flow as UCE brain 512, for the `ucebrain768bican` model (UCE-brain d768l14v2 + BICAN anneal) in RunFoundationModelNRP.
+- `getEmbeddingfromS3.py --embedding uce_brain_768_bican` reads `s3://latentbrain/UCE_brain_768_bican/*_ucebrain768bican_adata.h5ad` (obsm `X_ucebrain768bican`) into `UCE_brain_768_bican_npy_obs/`; `combineEmbedding.py` writes a 768-dim `uce.h5`.
+- KNN: 768 is divisible by 128 and 256 but not 320, so `ivfpq_320` fails here too.
+
+### Provenance (all embeddings)
+
+- `getEmbeddingfromS3.py` writes `<id>_provenance.json` (source h5ad URL, `source_verified`, pipeline commits, bf16/fp32 chunk counts, and the model's `uns["<method>_provenance"]`, e.g. uce-brain commit) next to each `.npy`.
+- It stops on a chunk with `source_verified = False` (embedded from a staged copy with no record of where it came from), or whose source URL or model provenance differs from the dataset's other chunks. bf16 may differ (it follows the GPU; bf16 and fp32 embeddings are almost identical). Chunks from before these fields existed pass.
+- It also checks every chunk for NaN embedding rows. A chunk with more than 1% NaN rows is a failed embedding run (the uce-brain 768 build had 8 chunks 61-90% NaN): it is listed under `nan_chunks` in `_provenance.json`, and the run exits 1 at the end. Datasets with `nan_chunks` are downloaded again on the next run, so re-embed the chunks upstream and rerun. `combineEmbedding.py` (select mode) stops before combining if any selected dataset has `nan_chunks`.
+- Chunks with 1% or fewer NaN rows are only printed. `combineEmbedding.py` drops those cells, logs how many per dataset, and checks that cells written + NaN-dropped equals the pre-scan count.
+- In select mode `combineEmbedding.py` collects them into `<results_dir>/dataset_provenance.json` (null for datasets with no `_provenance.json`) and warns if datasets were embedded with different model provenance.
 
 ## Reference
 
