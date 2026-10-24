@@ -8,6 +8,7 @@ input_group = parser.add_mutually_exclusive_group(required=True)
 input_group.add_argument("--npy", help="UCE embeddings .npy file")
 input_group.add_argument("--h5", help="UCE embeddings HDF5 file (dataset key: 'data')")
 input_group.add_argument("--h5ad", help="UCE adata .h5ad file")
+parser.add_argument("--obsm-key", help="obsm key holding the embedding with --h5ad (default: the one X_uce* key, e.g. X_uce, X_ucebrain512)")
 parser.add_argument("--obs", metavar="FILE", help="obs TSV (required with --npy/--h5; optional override with --h5ad)")
 parser.add_argument("--config", required=True, metavar="JSON", help="transform config, e.g. Wang2025Nature/transform_e100.json")
 parser.add_argument("--out", default="newdata.arrow", help="output Arrow IPC file (default: newdata.arrow)")
@@ -31,6 +32,9 @@ import pyarrow as pa
 import pyarrow.ipc as ipc
 
 sys.path.insert(0, "/mnt/efsUCE/umap_pytorch")
+# umap-learn imports tensorflow (for ParametricUMAP) if present; on CPUs without AVX
+# (courtyard) that crashes with "Illegal instruction". Not needed here, so hide it.
+sys.modules["tensorflow"] = None
 import umap_pytorch
 print(umap_pytorch.__file__)
 
@@ -149,7 +153,14 @@ elif args.h5:
     obs = pd.read_csv(args.obs, sep="\t", index_col=0)
 else:
     adata = anndata.read_h5ad(args.h5ad, backed='r')
-    uce = adata.obsm["X_uce"]
+    obsm_key = args.obsm_key
+    if obsm_key is None:
+        uce_keys = [k for k in adata.obsm.keys() if k.startswith("X_uce")]
+        if len(uce_keys) != 1:
+            sys.exit(f"ERROR: expected one X_uce* key in obsm, found {list(adata.obsm.keys())}; pass --obsm-key")
+        obsm_key = uce_keys[0]
+    print(f"Embedding: obsm['{obsm_key}']")
+    uce = adata.obsm[obsm_key]
     obs = pd.read_csv(args.obs, sep="\t", index_col=0) if args.obs else adata.obs
 
 # Reference category order. The viewer reserves code 0 for "background" in the
