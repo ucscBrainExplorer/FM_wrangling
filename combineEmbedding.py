@@ -161,6 +161,7 @@ else:
 os.makedirs(results_dir, exist_ok=True)
 
 select_datasets = []
+provenance_notes = []                     # select_datasets mode only: embedding provenance lines for the wrangling notes
 if args.select_datasets_file:
     with open(args.select_datasets_file, 'r') as f:
         select_rows = [line.rstrip("\n").split("\t") for line in f if line.strip() and not line.startswith("#")]
@@ -237,6 +238,25 @@ if args.select_datasets_file:
         f.write("\n")
     print(f"Provenance for {len(select_datasets)} datasets written to {provenance_out}")
 
+    # Summary for the wrangling notes (the JSON above stays the full record): model and
+    # pipeline commits once, then each dataset's source URL and whether it was verified
+    for m in sorted(models):
+        for name, fields in json.loads(m).items():
+            provenance_notes.append(f"model: {name}: " + ", ".join(f"{k}={v}" for k, v in fields.items()
+                                                                   if k != "n_nan_cells"))
+    if not models:
+        provenance_notes.append("model: none recorded in <id>_provenance.json")
+    commits = sorted({c for p in provenance.values() if p for c in p.get("pipeline_git_commits", [])})
+    provenance_notes.append(f"pipeline commits: {', '.join(commits) if commits else 'none recorded'}")
+    for ds_id in select_datasets:
+        p = provenance[ds_id]
+        if p is None:
+            status = "no <id>_provenance.json; source URL from the select file"
+        else:
+            status = {True: "verified", False: "not verified: staged copy had no .source record",
+                      None: "verification unknown: chunks predate source_verified"}[p.get("source_verified")]
+        provenance_notes.append(f"{ds_id}: {source_urls[ds_id]} ({status})")
+
 obs_outfile = "obs.tsv.gz"
 
 ucsc_file = "datasetLists/ucsc_datasets.txt"
@@ -278,6 +298,8 @@ dataset_collection_info = []              # (real_dataset_id, collection_doi, co
                                           #   for the wrangling notes — actual values, not a generic description
 cellCount = 0
 nan_dropped_total = 0  # primary cells dropped for NaN embeddings; prescan counts them
+cell_filter_info = []                     # (real_dataset_id, primary_filter, total, non_primary_dropped, nan_dropped)
+                                          #   for the wrangling notes; primary_filter is "applied" or why it was not
 remapfile_exist_datasets = []             # (real_dataset_id, dataset_id, mapped_filepath, doc_filepath)
                                           #   remap file (_remap.tsv + _obs_mapped.tsv.gz) found — UCSC mapped obs merged in as-is
 arr_dtype = np.dtype('float32')
@@ -734,6 +756,9 @@ for singleDir in data_dirs:
 
             any_written = False
             nan_dropped = 0
+            non_primary_dropped = 0
+            primary_filter = None
+            n_total = uce_raw.shape[0]
             for uce_start, obs_chunk, mapped_chunk in chunk_iter:
                 uce_end   = min(uce_start + CHUNK, uce_raw.shape[0])
                 uce_chunk = np.array(uce_raw[uce_start:uce_end])
@@ -744,11 +769,17 @@ for singleDir in data_dirs:
                    dataset_id not in ucsc_datasets and \
                    dataset_id not in cgCensus_non_primary_datasets:
                     mask_primary = (obs_chunk["is_primary_data"].str.strip().str.lower() == 'true').values
+                    primary_filter = "applied"
                 else:
                     mask_primary = np.ones(len(uce_chunk), dtype=bool)
+                    primary_filter = ("not applied: UCSC dataset" if dataset_id in ucsc_datasets else
+                                      f"not applied: listed in {cgCensus_non_primary_file}"
+                                      if dataset_id in cgCensus_non_primary_datasets else
+                                      "not applied: no is_primary_data column")
 
                 combined_mask = mask_uce & mask_primary
                 nan_dropped += int((~mask_uce & mask_primary).sum())
+                non_primary_dropped += int((~mask_primary).sum())
                 if combined_mask.sum() == 0:
                     continue
 
@@ -815,6 +846,7 @@ for singleDir in data_dirs:
                         dset_uce[-uce_filtered.shape[0]:] = uce_filtered
 
             del uce_raw
+            cell_filter_info.append((real_dataset_id, primary_filter, n_total, non_primary_dropped, nan_dropped))
             if nan_dropped:
                 nan_dropped_total += nan_dropped
                 print(f"  {real_dataset_id}: dropped {nan_dropped:,} cells with NaN embeddings")
@@ -906,6 +938,18 @@ with open(wrangling_notes_path, "w") as wf:
         wf.write(f"    collection_doi_label: {_fmt(doi_label)}\n")
         wf.write(f"    dataset_title:        {_fmt(title)}\n")
     wf.write(f"\nDatasets processed: {len(dataset_list)}\n")
+    if provenance_notes:
+        wf.write("\nEmbedding provenance (from <id>_provenance.json; full record in dataset_provenance.json):\n")
+        for line in provenance_notes:
+            wf.write(f"  {line}\n")
+    if cell_filter_info:
+        wf.write("\nCell filters (is_primary_data == True for CELLxGENE datasets; cells with NaN embeddings):\n")
+        for real_ds_id, primary_filter, n_total, n_non_primary, n_nan in cell_filter_info:
+            n_kept = n_total - n_non_primary - n_nan
+            wf.write(f"  {real_ds_id}: kept {n_kept:,} of {n_total:,} cells; "
+                     f"is_primary_data filter {primary_filter or 'not applied: no cells'}"
+                     f"{f' (dropped {n_non_primary:,} non-primary)' if primary_filter == 'applied' else ''}; "
+                     f"dropped {n_nan:,} with NaN embeddings\n")
     if manual_rule_notes:
         wf.write(f"\nmanual_column.json overrides applied in combine "
                  f"({'select_datasets' if union_obs_cols is not None else 'full run'}; "
