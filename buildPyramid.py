@@ -30,7 +30,8 @@ parser.add_argument("--pyramid_file", required=True,
 parser.add_argument("--metadata_only", action="store_true",
                     help="Generate metadata.json without building pyramid tiles")
 parser.add_argument("--skip_top_levels", type=int, default=0,
-                    help="Number of highest-resolution levels to skip (default: 0 = save all)")
+                    help="Number of highest-resolution levels not to write as tiles (default: 0 = save all); "
+                         "metadata.json still lists all levels")
 args = parser.parse_args()
 
 results_dir  = args.results_dir
@@ -255,7 +256,7 @@ def write_json(reference_name, viz_label, start_chn, cat_list, feature_type,
         with open(path) as f:
             J = json.load(f)
         assert J["tileSize"] == tilesize
-        assert J["levels"] == max_level + 1 - args.skip_top_levels
+        assert J["levels"] == max_level + 1
         assert J["offset"] == [float(offset_x), float(offset_y)]
         assert J["image_scalef"] == float(image_scalef)
         for i in range(len(J["phenotypes"]), start_chn + 1):
@@ -270,7 +271,8 @@ def write_json(reference_name, viz_label, start_chn, cat_list, feature_type,
             "phenotypes": [],
             "size": [int(width / math.pow(2, max_level)), int(height / math.pow(2, max_level))],
             "tileSize": tilesize,
-            "levels": max_level + 1 - args.skip_top_levels,
+            # all levels, even with --skip_top_levels: map_newdata.py and the viewer need the full pyramid geometry
+            "levels": max_level + 1,
             "fileformat": "png",
             "offset": [float(offset_x), float(offset_y)],
             "image_scalef": float(image_scalef),
