@@ -3,7 +3,7 @@
 Run from the directory above FM_wrangling (it reads datasetLists/ and .env by relative path):
   python3 FM_wrangling/annotate_obs.py --data_dir <ATLAS_DIR>
 
-Reads   <ATLAS_DIR>/obs.tsv.gz, <ATLAS_DIR>/dataset_ids.tsv (dataset_id <tab> source h5ad URL),
+Reads   <ATLAS_DIR>/obs.tsv.gz (or --metadata_file), <ATLAS_DIR>/dataset_ids.tsv (dataset_id <tab> source h5ad URL),
         datasetLists/{ucsc_datasets.txt, manual_column.json, datasets.info.cxg.<date>.txt}, and the
         manually filled fields (reference_name, reference_uuid, ...) of an existing metadata_summary.json
 Writes  obs_annotated.tsv.gz, metadata_summary.json, wrangling_notes_annotation.txt and the two
@@ -14,6 +14,8 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--data_dir", required=True, help="Atlas directory holding obs.tsv.gz and dataset_ids.tsv")
+parser.add_argument("--metadata_file", default="obs.tsv.gz",
+                    help="Obs file inside --data_dir to annotate (default: obs.tsv.gz), e.g. a copy with harmonized label columns added")
 parser.add_argument("--output_dir", default=None,
                     help="Where to write the outputs (default: --data_dir); use a scratch dir to compare a re-run")
 args = parser.parse_args()
@@ -31,7 +33,7 @@ load_dotenv(override=True)
 data_dir = args.data_dir
 output_dir = args.output_dir or data_dir
 os.makedirs(output_dir, exist_ok=True)
-metadata_file = os.path.join(data_dir, "obs.tsv.gz")
+metadata_file = os.path.join(data_dir, args.metadata_file)
 metadata_annotated_file = os.path.join(output_dir, "obs_annotated.tsv.gz")
 existing_summary_file = os.path.join(data_dir, "metadata_summary.json")  # source of the manually filled fields
 metadata_summary_file = os.path.join(output_dir, "metadata_summary.json")
@@ -844,8 +846,15 @@ summary["organism_ontology_term_id"] = safeGetUniqueLabelCounts(meta_data, "orga
 summary["normalized_age_bucket_ontology_term_id"] = normalized_age_bucket_ontology_term_id_summary
 
 # cell_type and cell_type_ontology_term_id
-# Priority: harmonized_cell_type > harmonized_cell_label > mapped_cell_label > custom_cell_type > cell_type
-if "harmonized_cell_type" in meta_data.columns:
+# Priority: harmonized_subclass > harmonized_cell_type > harmonized_cell_label > mapped_cell_label > custom_cell_type > cell_type
+# harmonized_subclass: cross-study subclass labels added to obs (no Cell Ontology terms)
+if "harmonized_subclass" in meta_data.columns:
+    summary["cell_type"] = getUniqueLabelCounts(meta_data, "harmonized_subclass")
+    summary["cell_type_ontology_term_id"] = []
+    note = "'harmonized_subclass' is used to generate the cell_type distribution (no cell type ontology terms)"
+    fwrangle.write(f"{note}\n")
+    print(note)
+elif "harmonized_cell_type" in meta_data.columns:
     summary["cell_type"] = getUniqueLabelCounts(meta_data, "harmonized_cell_type")
     summary["cell_type_ontology_term_id"] = getUniqueLabelCounts(meta_data, "harmonized_cell_type_ontology_term_id")
     note = "'harmonized_cell_type' is used to generate the cell_type distribution"
