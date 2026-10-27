@@ -1,0 +1,7 @@
+#for cellxgene_census data that are not primary_dataset
+#dataset_id	cell_count	collection_doi	collection_doi_label	dataset_title
+8e10f1c4-8e98-41e5-b65f-8cd89a887122	2480956	10.1126/science.add7046	Siletti et al. (2023) Science	All neurons
+b165f033-9dec-468a-9248-802fc6902a74	888263	10.1126/science.add7046	Siletti et al. (2023) Science	All non-neuronal cells
+c4b03352-af8d-492a-8d6b-40f304e0a122	152189	10.1126/science.add7046	Siletti et al. (2023) Science	Supercluster: Medium spiny neuron
+e4ddac12-f48f-4455-8e8d-c2a48a683437	129495	10.1126/science.adf6812	Jorstad et al. (2023) Science	Supercluster: CGE-derived interneurons
+5bdc423a-59e6-457d-aa01-debd2c9c564f	114605	10.1126/science.adf6812	Jorstad et al. (2023) Science	Dissection: Primary motor cortex (M1)

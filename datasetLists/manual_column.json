@@ -1,0 +1,406 @@
+{
+  "8e10f1c4-8e98-41e5-b65f-8cd89a887122": {
+    "cell_type": {
+      "value": "supercluster_term",
+      "type": "column"
+    },
+    "organism": {
+      "value": "Homo sapiens",
+      "type": "static"
+    },
+    "organism_ontology_term_id": {
+      "value": "NCBITaxon:9606",
+      "type": "static"
+    },
+    "collection_doi_label": "Siletti et al. (2023) Science",
+    "dataset_title": "All neurons"
+  },
+  "b165f033-9dec-468a-9248-802fc6902a74": {
+    "cell_type": {
+      "value": "supercluster_term",
+      "type": "column"
+    },
+    "organism": {
+      "value": "Homo sapiens",
+      "type": "static"
+    },
+    "organism_ontology_term_id": {
+      "value": "NCBITaxon:9606",
+      "type": "static"
+    },
+    "collection_doi_label": "Siletti et al. (2023) Science",
+    "dataset_title": "All non-neuronal cells"
+  },
+  "6f7fd0f1-a2ed-4ff1-80d3-33dde731cbc3": {
+    "organism": {
+      "value": "Homo sapiens",
+      "type": "static"
+    },
+    "organism_ontology_term_id": {
+      "value": "NCBITaxon:9606",
+      "type": "static"
+    },
+    "sample_id": {
+      "value": "Specimen ID",
+      "type": "column"
+    },
+    "collection_doi_label": "Gabitto et al. (2024) Nat Neurosci",
+    "dataset_title": "Whole Taxonomy - DLPFC: Seattle Alzheimer's Disease Atlas (SEA-AD)"
+  },
+  "c2876b1b-06d8-4d96-a56b-5304f815b99a": {
+    "organism": {
+      "value": "Homo sapiens",
+      "type": "static"
+    },
+    "organism_ontology_term_id": {
+      "value": "NCBITaxon:9606",
+      "type": "static"
+    },
+    "sample_id": {
+      "value": "Specimen ID",
+      "type": "column"
+    },
+    "collection_doi_label": "Gabitto et al. (2024) Nat Neurosci",
+    "dataset_title": "Whole Taxonomy - MTG: Seattle Alzheimer's Disease Atlas (SEA-AD)"
+  },
+  "d7f5d8d0-6150-48d7-b094-c34286ad11a1": {
+    "organism": {
+      "value": "Homo sapiens",
+      "type": "static"
+    },
+    "organism_ontology_term_id": {
+      "value": "NCBITaxon:9606",
+      "type": "static"
+    },
+    "collection_doi_label": "He et al. (2024) Nature",
+    "dataset_title": "HNOCA Extended: The Human Neural Organoid Atlas"
+  },
+  "aa369999-a034-4ad9-b459-8a93c86ea77b": {
+    "organism": {
+      "value": "Homo sapiens",
+      "type": "static"
+    },
+    "organism_ontology_term_id": {
+      "value": "NCBITaxon:9606",
+      "type": "static"
+    },
+    "collection_doi_label": "Wang et al. (2025) Nature",
+    "dataset_title": "snMultiome data of the developing human neocortex"
+  },
+  "53ce2631-3646-4172-bbd9-38b0a44d8214": {
+    "organism": {
+      "value": "Homo sapiens",
+      "type": "static"
+    },
+    "organism_ontology_term_id": {
+      "value": "NCBITaxon:9606",
+      "type": "static"
+    },
+    "collection_doi_label": "Zhu et al. (2023) Sci. Adv.",
+    "dataset_title": "10x scRNA-seq from human cortex"
+  },
+  "ucsc-2e934674-0669-4d8a-9faa-9d37078f8bb6": {
+    "cell_type": {
+      "value": "Subclass",
+      "type": "column"
+    },
+    "cell_type_ontology_term_id": {
+      "value": "Subclass",
+      "type": "map",
+      "map": {
+        "ACx MEIS2 GABA": null,
+        "Astrocyte": "CL:0000127",
+        "CN Cholinergic GABA": null,
+        "CN GABA-Glut": null,
+        "CN LAMP5-CXCL14 GABA": null,
+        "CN LAMP5-LHX6 GABA": null,
+        "CN LHX8 GABA": null,
+        "CN MEIS2 GABA": null,
+        "CN ONECUT1 GABA": null,
+        "CN ST18 GABA": null,
+        "CN VIP GABA": null,
+        "COP": "CL:4023059",
+        "Endo": "CL:0000115",
+        "Ependymal": "CL:0000065",
+        "F GABA": null,
+        "F Glut": null,
+        "F M GATA3 GABA": null,
+        "F M Glut": null,
+        "Lymphocyte": "CL:0000542",
+        "M Dopa": "CL:4042025",
+        "Macrophage": "CL:0000235",
+        "Microglia": "CL:0000129",
+        "Monocyte": "CL:0000576",
+        "OPC": "CL:0002453",
+        "OT Granular GABA": "CL:4030053",
+        "Oligodendrocyte": "CL:0000128",
+        "Pericyte": "CL:0000669",
+        "SMC": "CL:0000192",
+        "SN PAX7 GABA": null,
+        "STR D1 MSN": "CL:4023026",
+        "STR D2 MSN": "CL:4023029",
+        "STR Hybrid MSN": "CL:4030050",
+        "STR RSPO2 GABA": null,
+        "STR SST GABA": null,
+        "STR SST-CHODL GABA": null,
+        "VLMC": "CL:4023051"
+      },
+      "note": "CL IDs taken from the source CL:ID_subclass column, except: Monocyte corrected from CL:0000542 (lymphocyte, a source error) to CL:0000576 (monocyte); F Glut and F M Glut set to NaN because the source value 'PR 2771' is a placeholder for a pending CL pull request, not a CL ID; subclasses with no CL ID in the source are NaN."
+    },
+    "organism": {
+      "value": "Homo sapiens",
+      "type": "static"
+    },
+    "tissue": {
+      "value": "basal ganglion",
+      "type": "static"
+    },
+    "tissue_ontology_term_id": {
+      "value": "UBERON:0002420",
+      "type": "static"
+    },
+    "tissue_type": {
+      "value": "tissue",
+      "type": "static"
+    },
+    "sex": {
+      "value": "self_reported_sex",
+      "type": "map",
+      "map": {
+        "Male": "male",
+        "Female": "female"
+      }
+    },
+    "sex_ontology_term_id": {
+      "value": "self_reported_sex_ontology_term_id",
+      "type": "column"
+    },
+    "sample_id": {
+      "value": "load_id",
+      "type": "column"
+    },
+    "self_reported_ethnicity_ontology_term_id": {
+      "value": "unknown",
+      "type": "static",
+      "note": "source value 'Homo sapiens' is an organism, not an ethnicity term; self_reported_ethnicity is 'unknown', so the ID is set to 'unknown' (CELLxGENE convention)"
+    },
+    "collection_doi_label": "BICAN Basal Ganglia",
+    "dataset_title": "Human_HMBA_basalganglia_AIT_pre-print"
+  },
+  "#ucsc-4291fc35-aa8f-43fb-b7f8-987770cebdc7": {
+    "cell_type": {
+      "value": "Group",
+      "type": "column"
+    },
+    "cell_type_ontology_term_id": {
+      "value": "CL:ID_group",
+      "type": "column"
+    },
+    "collection_doi_label": "BICAN Basal Ganglia",
+    "dataset_title": "Macaque_HMBA_basalganglia_AIT_pre-print"
+  },
+  "LungMAP-MouseLung-CellRef.v1": {
+    "cell_type": {
+      "value": "celltype_level3",
+      "type": "column"
+    },
+    "organism": {
+      "value": "Mus musculus",
+      "type": "static"
+    },
+    "organism_ontology_term_id": {
+      "value": "NCBITaxon:10090",
+      "type": "static"
+    },
+    "tissue": {
+      "value": "lung",
+      "type": "static"
+    },
+    "tissue_type": {
+      "value": "tissue",
+      "type": "static"
+    },
+    "disease": {
+      "value": "normal",
+      "type": "static"
+    },
+    "assay": {
+      "value": "drop-seq",
+      "type": "static"
+    },
+    "suspension_type": {
+      "value": "cell",
+      "type": "static"
+    },
+    "collection_doi_label": "Guo et al. (2022) Nature",
+    "dataset_title": "LungMAP_MouseLung_CellRef.v1"
+  },
+  "ucsc-SCPCP000001_combined": {
+    "cell_type": {
+      "value": "consensus_celltype_annotation",
+      "type": "column"
+    },
+    "cell_type_ontology_term_id": {
+      "value": "consensus_celltype_ontology",
+      "type": "column"
+    },
+    "collection_doi_label": "DeSisto et al. (2023) Neuro-oncology",
+    "dataset_title": "Single cell RNA sequencing of pediatric high-grade gliomas"
+  },
+  "ucsc-SCPCP000002_combined": {
+    "cell_type": {
+      "value": "consensus_celltype_annotation",
+      "type": "column"
+    },
+    "cell_type_ontology_term_id": {
+      "value": "consensus_celltype_ontology",
+      "type": "column"
+    },
+    "collection_doi_label": "ScPCA Portal SCPCP000002",
+    "dataset_title": "Single cell RNA sequencing of pediatric low-grade gliomas"
+  },
+  "ucsc-SCPCP000009_combined": {
+    "cell_type": {
+      "value": "consensus_celltype_annotation",
+      "type": "column"
+    },
+    "cell_type_ontology_term_id": {
+      "value": "consensus_celltype_ontology",
+      "type": "column"
+    },
+    "collection_doi_label": "Lee et al. (2024) Nat Commun",
+    "dataset_title": "Single-cell gene expression and cytosine modification profiling in pediatric central nervous system tumors"
+  },
+  "ucsc-SCPCP000021_combined": {
+    "cell_type": {
+      "value": "consensus_celltype_annotation",
+      "type": "column"
+    },
+    "cell_type_ontology_term_id": {
+      "value": "consensus_celltype_ontology",
+      "type": "column"
+    },
+    "collection_doi_label": "ScPCA Portal SCPCP000021",
+    "dataset_title": "Profiling pediatric and young adolescent (Ped-AYA) high-grade gliomas (HGGs)"
+  },
+  "ucsc-allen-WMB-10Xv3-Isocortex-1": {
+    "cell_type": {
+      "value": "subclass",
+      "type": "column"
+    },
+    "collection_doi_label": "Yao et al. (2023) Nature",
+    "dataset_title": "Whole mouse brain isocortex-1"
+  },
+  "ucsc-allen-WMB-10Xv3-STR": {
+    "cell_type": {
+      "value": "subclass",
+      "type": "column"
+    },
+    "collection_doi_label": "Yao et al. (2023) Nature",
+    "dataset_title": "Whole mouse brain striatum"
+  },
+  "ucsc-Bhaduri-NatNeurosci-2025": {
+    "cell_type": {
+      "value": "Type.v2",
+      "type": "column"
+    },
+    "collection_doi_label": "Nano et al. (2025) Nat Neurosci",
+    "dataset_title": "developmental meta-atlas"
+  },
+  "WB_HMBA_Human_AIT_v0.5": {
+    "cell_type": {
+      "value": "concensus_subclass",
+      "type": "column"
+    },
+    "cell_type_ontology_term_id": {
+      "value": "",
+      "type": "static"
+    },
+    "tissue": {
+      "value": "brain region",
+      "type": "column"
+    },
+    "tissue_type": {
+      "value": "tissue",
+      "type": "static"
+    },
+    "development_stage_ontology_term_id": {
+      "value": "",
+      "type": "static"
+    },
+    "collection_doi_label": "Human and Mammalian Brain Atlas v0.5",
+    "dataset_title": "WB_HMBA_Human_AIT"
+  },
+  "WB_HMBA_Macaque_AIT_v0.5": {
+    "cell_type": {
+      "value": "concensus_subclass",
+      "type": "column"
+    },
+    "cell_type_ontology_term_id": {
+      "value": "",
+      "type": "static"
+    },
+    "tissue": {
+      "value": "brain region",
+      "type": "column"
+    },
+    "tissue_type": {
+      "value": "tissue",
+      "type": "static"
+    },
+    "development_stage_ontology_term_id": {
+      "value": "",
+      "type": "static"
+    },
+    "collection_doi_label": "Human and Mammalian Brain Atlas v0.5",
+    "dataset_title": "WB_HMBA_Macaque_AIT"
+  },
+  "WB_HMBA_marmoset_AIT_v0.5": {
+    "cell_type": {
+      "value": "concensus_subclass",
+      "type": "column"
+    },
+    "cell_type_ontology_term_id": {
+      "value": "",
+      "type": "static"
+    },
+    "tissue": {
+      "value": "brain region",
+      "type": "column"
+    },
+    "tissue_type": {
+      "value": "tissue",
+      "type": "static"
+    },
+    "development_stage_ontology_term_id": {
+      "value": "",
+      "type": "static"
+    },
+    "collection_doi_label": "Human and Mammalian Brain Atlas v0.5",
+    "dataset_title": "WB_HMBA_marmoset_AIT"
+  },
+  "ucsc-92b37feb-aa2c-40d7-bd90-0a9b5ddb3b27": {
+    "organism": {
+      "value": "Homo sapiens",
+      "type": "static"
+    },
+    "organism_ontology_term_id": {
+      "value": "NCBITaxon:9606",
+      "type": "static"
+    },
+    "collection_doi_label": "Gabitto et al. (2024) Nat Neurosci",
+    "dataset_title": "Whole Taxonomy - MTG: Seattle Alzheimer's Disease Atlas (SEA-AD)"
+  },
+  "liver_GSE124395": {
+    "organism": {
+      "value": "Homo sapiens",
+      "type": "static"
+    },
+    "organism_ontology_term_id": {
+      "value": "NCBITaxon:9606",
+      "type": "static"
+    },
+    "collection_doi_label": "Aizarani et al. (2019) Nature",
+    "dataset_title": "A human liver cell atlas reveals heterogeneity and epithelial progenitors"
+  }
+}

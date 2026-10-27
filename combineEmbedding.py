@@ -259,10 +259,11 @@ if args.select_datasets_file:
 
 obs_outfile = "obs.tsv.gz"
 
-ucsc_file = "datasetLists/ucsc_datasets.txt"
-cgCensus_non_primary_file ="datasetLists/cgCensus_non_primary_datasets.txt"
-ignore_file = "datasetLists/ignore_datasets.txt"
-manual_column_file = "datasetLists/manual_column.json"
+lists_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "datasetLists")  # versioned with the scripts
+ucsc_file = os.path.join(lists_dir, "ucsc_datasets.txt")
+cgCensus_non_primary_file = os.path.join(lists_dir, "cgCensus_non_primary_datasets.txt")
+ignore_file = os.path.join(lists_dir, "ignore_datasets.txt")
+manual_column_file = os.path.join(lists_dir, "manual_column.json")
 
 if os.path.isdir(dup_dir):
     with open(ignore_file) as f:
@@ -403,9 +404,9 @@ def get_ucsc_collection():
 
 #cellxgene info: newest datasetLists/datasets.info.cxg.YYYY-MM-DD.txt (from fetch_cxg_datasets.py);
 # replaces cellxgene_census.open_soma(), whose tiledbsoma needs AVX (courtyard has none)
-_cxg_info_files = sorted(glob.glob("datasetLists/datasets.info.cxg.*.txt"))
+_cxg_info_files = sorted(glob.glob(os.path.join(lists_dir, "datasets.info.cxg.*.txt")))
 if not _cxg_info_files:
-    print("ERROR: no datasetLists/datasets.info.cxg.*.txt found; run datasetLists/fetch_cxg_datasets.py")
+    print(f"ERROR: no datasets.info.cxg.*.txt in {lists_dir}; run {lists_dir}/fetch_cxg_datasets.py")
     sys.exit(1)
 cxg_info_file = _cxg_info_files[-1]
 print(f"  CELLxGENE dataset info: {cxg_info_file}")

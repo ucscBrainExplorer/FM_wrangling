@@ -1,6 +1,6 @@
 """Annotate an atlas's obs.tsv.gz and build the portal's metadata_summary.json.
 
-Run from the directory above FM_wrangling (it reads datasetLists/ and .env by relative path):
+Run from the directory above FM_wrangling (it reads .env by relative path; datasetLists/ is next to this script):
   python3 FM_wrangling/annotate_obs.py --data_dir <ATLAS_DIR>
 
 Reads   <ATLAS_DIR>/obs.tsv.gz (or --metadata_file), <ATLAS_DIR>/dataset_ids.tsv (dataset_id <tab> source h5ad URL),
@@ -46,11 +46,12 @@ system_prompt_file_normalized_organism = os.path.join(output_dir, "system_prompt
 dataset_uri_file = os.path.join(data_dir, "dataset_ids.tsv")  # dataset_id <tab> source h5ad URL, no header
 
 # info files
-ucsc_file = "datasetLists/ucsc_datasets.txt"
-manual_column_config_file = "datasetLists/manual_column.json"
+lists_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "datasetLists")  # versioned with the scripts
+ucsc_file = os.path.join(lists_dir, "ucsc_datasets.txt")
+manual_column_config_file = os.path.join(lists_dir, "manual_column.json")
 # CELLxGENE dataset table: newest datasetLists/datasets.info.cxg.<date>.txt (refresh with
 # datasetLists/fetch_cxg_datasets.py); replaces the live census query, which needs AVX
-cxg_info_file = sorted(glob.glob("datasetLists/datasets.info.cxg.*.txt"))[-1]
+cxg_info_file = sorted(glob.glob(os.path.join(lists_dir, "datasets.info.cxg.*.txt")))[-1]
 
 if not os.path.exists(metadata_file):
     sys.exit(f"ERROR: {metadata_file} not found")

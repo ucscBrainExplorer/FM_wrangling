@@ -1,0 +1,22 @@
+# ucsc: non cellxgene dataset
+dataset_id	cell_count	collection_doi	collection_doi_label	dataset_title	source_path
+ucsc-2e934674-0669-4d8a-9faa-9d37078f8bb6	1034819		BICAN Basal Ganglia	Human_HMBA_basalganglia_AIT_pre-print	s3://released-taxonomies-802451596237-us-west-2/HMBA/BasalGanglia/BICAN_05072025_pre-print_release/Human_HMBA_basalganglia_AIT_pre-print.h5ad
+#ucsc-4291fc35-aa8f-43fb-b7f8-987770cebdc7	548281		BICAN Basal Ganglia	Macaque_HMBA_basalganglia_AIT_pre-print	
+ucsc-92b37feb-aa2c-40d7-bd90-0a9b5ddb3b27	1378211	10.1038/s41593-024-01774-5	Gabitto et al. (2024) Nat Neurosci	Whole Taxonomy - MTG: Seattle Alzheimer's Disease Atlas (SEA-AD)	
+ucsc-SCPCP000001_combined	27310	10.1093/neuonc/noad207	DeSisto et al. (2023) Neuro-oncology	Single cell RNA sequencing of pediatric high-grade gliomas	
+ucsc-SCPCP000002_combined	49224		ScPCA Portal SCPCP000002	Single cell RNA sequencing of pediatric low-grade gliomas	
+ucsc-SCPCP000009_combined	36204	10.1038/s41467-024-47712-8	Lee et al. (2024) Nat Commun	Single-cell gene expression and cytosine modification profiling in pediatric central nervous system tumors	
+ucsc-SCPCP000021_combined	24051		ScPCA Portal SCPCP000021	Profiling pediatric and young adolescent (Ped-AYA) high-grade gliomas (HGGs)	
+ucsc-allen-WMB-10Xv3-STR	285167	10.1038/s41586-023-06812-z	Yao et al. (2023) Nature	Whole mouse brain striatum	
+ucsc-allen-WMB-10Xv3-Isocortex-1	228229	10.1038/s41586-023-06812-z	Yao et al. (2023) Nature	Whole mouse brain isocortex-1	
+ucsc-Bhaduri-NatNeurosci-2025	599211	10.1038/s41593-025-01933-2	Nano et al. (2025) Nat Neurosci	developmental meta-atlas	
+DevVIS-multiom-snRNA-processed	200061	10.1038/s41586-025-09644-1	Gao et al. (2025) Nature	Multiome snRNA-seq dataset	
+DevVIS-scRNA-processed	568654	10.1038/s41586-025-09644-1	Gao et al. (2025) Nature	10xv3 scRNA-seq dataset	
+LungMAP-MouseLung-CellRef.v1	71439	10.1038/s41467-023-40173-5	Guo et al. (2022) Nature	LungMAP_MouseLung_CellRef.v1	
+WB_HMBA_Human_AIT_v0.5	9712245		Human and Mammalian Brain Atlas v0.5	WB_HMBA_Human_AIT	s3://released-taxonomies-802451596237-us-west-2/HMBA/whole_brain/0.5/human/WB_HMBA_Human_AIT.h5ad
+WB_HMBA_Macaque_AIT_v0.5	2276467		Human and Mammalian Brain Atlas v0.5	WB_HMBA_Macaque_AIT	s3://released-taxonomies-802451596237-us-west-2/HMBA/whole_brain/0.5/macaque/WB_crossSpecies_03252025_Macaque_AIT.h5ad
+WB_HMBA_marmoset_AIT_v0.5	1478715		Human and Mammalian Brain Atlas v0.5	WB_HMBA_marmoset_AIT	s3://released-taxonomies-802451596237-us-west-2/HMBA/whole_brain/0.5/marmoset/WB_crossSpecies_03252025_Marmoset_AIT.h5ad
+mouse_mammary_epi	50407	10.1038/s42003-021-02201-2	Saeki et al. (2021) Nat Commun Biol	Mammary cell gene expression atlas links epithelial cell remodeling events to breast carcinogenesis	https://cells.ucsc.edu/?ds=mouse-mammary-epithelium-integrated
+mouse_mammary_epi_noPal	32713	10.1038/s42003-021-02201-2	Saeki et al. (2021) Nat Commun Biol	Mammary cell gene expression atlas links epithelial cell remodeling events to breast carcinogenesis (no Pal)	https://cells.ucsc.edu/?ds=mouse-mammary-epithelium-integrated
+Flu_metastasis_GSM8213614	52031	10.1038/s41586-025-09332-0	Chia et al. (2025) Nature	Respiratory viral infections awaken metastatic breast cancer cells in lungs	https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE264175
+liver_GSE124395	10323	10.1038/s41586-019-1373-2	Aizarani et al. (2019) Nature	A human liver cell atlas reveals heterogeneity and epithelial progenitors  https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE124395

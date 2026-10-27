@@ -1,0 +1,141 @@
+#dataset_id	cell_count	collection_doi	collection_doi_label	dataset_title
+e4ddac12-f48f-4455-8e8d-c2a48a683437	129495	10.1126/science.adf6812	Jorstad et al. (2023) Science	Supercluster: CGE-derived interneurons
+5bdc423a-59e6-457d-aa01-debd2c9c564f	114605	10.1126/science.adf6812	Jorstad et al. (2023) Science	Dissection: Primary motor cortex (M1)
+f16f4108-7873-4035-9989-3748da1a7ff1	4720	10.1126/science.add7046	Siletti et al. (2023) Science	Supercluster: Committed oligodendrocyte precursor
+470565f2-5afc-456a-b617-18e4496c04fd	4714	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Midbrain (RN) - Red Nucleus - RN
+6dafb698-7a53-4699-ad13-1b5e2c164be7	5882	10.1126/science.add7046	Siletti et al. (2023) Science	Supercluster: Ependymal
+0d7f4c06-a6bd-47d2-a42b-3a7196704f77	9932	10.1126/science.add7046	Siletti et al. (2023) Science	Supercluster: Vascular
+531c9543-9093-45ed-93ac-ebc5815bfb8a	9156	10.1126/science.add7046	Siletti et al. (2023) Science	Supercluster: Fibroblast
+f6d9f2ad-5ec7-4d53-b7f0-ceb0e7bcd181	6877	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Thalamus (THM) - lateral nuclear complex of thalamus (LNC) - ventral posterior lateral nucleus - VPL
+50dc91a1-36b6-472a-b884-7307b6961ab1	8041	10.1126/science.add7046	Siletti et al. (2023) Science	Supercluster: Bergmann glia
+0ee5ae70-c3f5-473f-bd1c-287f4690ffc5	13623	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Myelencephalon (medulla oblongata) (Mo) - sensory relay nuclei in medulla oblongata - MoSR
+a5b5d1f3-dd8b-44f6-a685-15f0f741c062	20162	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Thalamus (THM) - Subthalamic nucleus and nearby - STH
+cfa755c1-48c5-4336-94f4-aa95eca4fbd5	7689	10.1126/science.add7046	Siletti et al. (2023) Science	Supercluster: Choroid plexus
+8039c63d-08b0-4fc9-af0f-5b57f08ca0da	17535	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Perirhinal cortex (area 35) (A35) - rostral subdivision of area 35 - A35r
+ed11cc3e-2947-407c-883c-c53b043917c3	8573	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Thalamus (THM) - Lateral nuclear complex (LNC) - ventral anterior nucleus of thalamus - VA
+d5452b83-7c3d-4d7c-ab7a-c7fece7196c5	8077	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Body of hippocampus (HiB) - Rostral CA3
+c5cfa2b7-abb1-4a50-908f-707b54ca606b	14094	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Midbrain (M) - Periaqueductal gray and Dorsal raphe nucleus - PAG-DR
+364348b4-bc34-4fe1-a851-60d99e36cafa	12944	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Thalamus (THM) - intralaminar nuclear complex (ILN) - posterior group of intralaminar nuclei (PILN) - centromedian nucleus of thalamus - CM
+1a018108-b4b6-457b-ba15-046d5e98c169	21534	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Myelencephalon (medulla oblongata) (Mo) - precerebellar nuclei (PrCbN) - inferior olive - IO
+77044335-0ac5-4406-9b3f-8cdd3656d67b	23349	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Pons (Pn) - afferent nuclei of cranial nerves in pons - PnAN
+adda0684-f8ea-4403-b393-2a25607077c4	14226	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Thalamus (THM) - posterior nuclear complex of thalamus (PoN) - medial geniculate nuclei (MG)
+00476f9f-ebc1-4b72-b541-32f912ce36ea	10099	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Hypothalamus (HTH) - mammillary region of HTH (HTHma)
+ca20e2ac-5676-4158-b5d0-0c2b15898b19	33968	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Basal nuclei (BN) - Globus pallidus (GP) - Internal segment of globus pallidus - GPi
+fbf173f9-f809-4d84-9b65-ae205d35b523	17660	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Thalamus (THM) - lateral nuclear complex of thalamus (LNC) - lateral posterior nucleus of thalamus + ventral posterior lateral nucleus - LP + VPL
+bd6b68e8-179a-42f0-9bde-b4fdf7d34dd1	14411	10.1126/science.add7046	Siletti et al. (2023) Science	Supercluster: Cerebellar inhibitory
+090da8ea-46e8-40df-bffc-1f78e1538d27	24190	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Spinal cord - SpC
+a59ba9fa-1407-4f15-8c56-d3637421570d	28028	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Cerebellum (CB) - Lateral hemisphere of cerebellum - CBL
+03d38670-1444-4001-bc53-9936e61d9b20	20027	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Hypothalamus (HTH) - preoptic region of HTH - HTHpo (medial preoptic nucleus, MPN) - supraoptic region of HTH - HTHso (paraventricular nucleus, PV)
+22658f4f-9268-41ad-8828-cc53f4baa9fa	12557	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Hypothalamus (HTH) - supraoptic region of HTH - HTHso
+2a8ca8f3-5599-4cda-b973-3a2dfc3c1fe6	10778	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Amygdaloid complex (AMY) - Corticomedial nuclear group (CMN) - anterior cortical nucleus - CoA
+381aa407-317a-40ef-8048-7ce0eacc4266	26172	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Thalamus (THM) - lateral nuclear complex of thalamus (LNC) - lateral posterior nucleus of thalamus - LP
+40569510-2282-461b-84df-6218ef208e0e	13173	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Hypothalamus (HTH) - tuberal region of hypothalamus - HTHtub
+9ec335f2-420a-45a8-b45a-1ab646e50041	10654	10.1126/science.add7046	Siletti et al. (2023) Science	Supercluster: Hippocampal CA4
+b8681124-aabf-4904-b9c9-66d834bf5bba	13382	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Thalamus (THM) - medial nuclear complex of thalamus (MNC) - mediodorsal nucleus of thalamus + reuniens nucleus (medioventral nucleus) of thalamus - MD + Re
+35c8a04c-8639-4d15-8228-765d8d93fc96	16753	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Hypothalamus (HTH) - supraoptic region of HTH - HTHso (anterior hypothalamic nucleus, AHN) - tuberal region of HTH - HTHtub (ventromedial and dorsomedial hypothalamic nucleic nuclei, VMH, DMH)
+07b1d7c8-5c2e-42f7-9246-26f746cd6013	27210	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Myelencephalon (medulla oblongata) (Mo) - afferent nuclei of cranial nerves in medulla oblongata - MoAN
+f20f44ef-a0d4-4d94-87de-037fd47141f0	18728	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Hypothalamus (HTH) - mammillary region of HTH (HTHma) - tuberal region of HTH - HTHtub
+64767efb-49b0-4562-a1bd-e619a5d9db41	14979	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Hypothalamus (HTH) - preoptic region of HTH - HTHpo
+c4dd26a8-d956-4bee-a233-44b573f2ce27	11265	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Body of hippocampus (HiB) - Rostral CA1-2
+f9034091-2e8f-4ac6-9874-e7b7eb566824	23120	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Myelencephalon (medulla oblongata) (Mo) - medullary reticular formation (MoRF) & efferent nuclei of cranial nerves in the medulla oblongata (MoEN) - MoRF-MoEN
+f3565fda-499a-4d20-bd92-563c09954c42	24155	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Pons (Pn) - Pontine reticular formation (PnRF) - parabrachial nuclei - PB
+bac09168-940b-4b11-8d55-b4955f80b98d	12461	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Head of hippocampus (HiH) - Uncal CA2-CA3
+7cd3c321-e487-4b51-a8af-9bf671b59fe5	26095	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Pons (Pn) - other nuclei in pontine tegmentum (XPnTg) - dorsal tegmental nucleus - DTg
+c7856243-c59a-4b70-8ce7-25b94c2d9da1	14352	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Cerebral cortex (Cx) - Gyrus rectus (ReG) - Medial orbitofrontal cortex - A14
+a7b4f565-691d-43ea-bf4a-d2d1d52bb4b4	27111	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Thalamus (THM) - Lateral nuclear complex of thalamus (LNC) - ventral group of lateral nucleus - VLN
+35090826-f636-40c1-a3ef-4466beeab9f8	18856	10.1126/science.add7046	Siletti et al. (2023) Science	Supercluster: Deep-layer near-projecting
+a84face4-eb30-4f43-994f-c6a13a097808	34078	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Cerebral cortex (Cx) - Cingulate gyrus, retrosplenial (CgGrs) - A29-A30
+599504e5-d4ad-45bd-9128-823faf0fb9c9	16602	10.1126/science.add7046	Siletti et al. (2023) Science	Supercluster: Mammillary body
+a4116666-d295-4443-a174-0acc283f92c4	29907	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Midbrain (M) - Superior colliculus and nearby nuclei - SC
+4d43082e-59cd-43ac-b77d-54d55519c881	24808	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Cerebral cortex (Cx) - Rostral gyrus (RoG) - Dorsal division of MFC - A32
+5a73f63f-18a2-49b5-b431-2c469c41a41b	20916	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Thalamus (THM) - medial nuclear complex of thalamus (MNC) - mediodorsal nucleus of thalamus - MD
+9372df2d-13d6-4fac-980b-919a5b7eb483	33794	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Midbrain (M) - Periaqueductal gray and nearby nuclei - PAG
+095940cb-7422-4510-96e2-cbafd961eb88	52045	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Cerebellum (CB) - Cerebellar deep nuclei - CbDN
+93131426-0124-4ab4-a013-9dfbcd99d467	24327	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Epithalamus - ETH
+d6a5b240-cc8f-45c1-ad36-2fc291e15e8e	25875	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Midbrain (M) - Pretectal region - PTR
+59923449-e303-43e6-9e63-03ef92f5ebd1	25071	10.1126/science.add7046	Siletti et al. (2023) Science	Supercluster: Miscellaneous
+7d3ab174-e433-40fc-a352-6fe71b1a19f9	28984	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Amygdaloid complex (AMY) - Basolateral nuclear group (BLN) - lateral nucleus - La
+4724c395-0c46-46d2-81f7-60fd271fb488	35350	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Head of hippocampus (HiH) - Uncal DG-CA4
+5e5ab909-f73f-4b57-98a0-6d2c5662f6a4	32306	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Midbrain (M) - Inferior colliculus and nearby nuclei - IC
+dd03ce70-3243-4c96-9561-330cc461e4d7	23732	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Cerebral cortex (Cx) - Perirhinal gyrus (PRG) - A35-A36
+ff7d15fa-f4b6-4a0e-992e-fd0c9d088ded	28051	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Cerebral cortex (Cx) - Cuneus, rostral part - Area Prostriata - Pro
+700aed19-c16e-4ba8-9191-07da098a8626	91838	10.1126/science.add7046	Siletti et al. (2023) Science	Supercluster: Microglia
+367b55f4-d543-49aa-90e8-4765fcb8c687	24354	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Thalamus (THM) - intralaminar nuclear complex (ILN) - posterior group of intralaminar nuclei (PILN) - centromedian and parafasicular nuclei - CM and Pf
+182f6a56-7360-4924-a74e-1772e07b3031	28724	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Body of hippocampus (HiB) - Rostral CA1-CA3
+fa554686-fc07-44dd-b2de-b726d82d26ec	29674	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Cerebral cortex (Cx) - Superior occipital gyrus (SOG) - Areas 19 and MT - A19
+e5b1115b-a486-49bb-bda3-8261822836e0	35359	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Cerebral cortex (Cx) - Caudal cingulate gyrus (CgGC) - A23
+64f4ad90-a422-400a-944d-4ce0f39594a7	33641	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Pons (Pn) - Pontine Nucleus - PN
+1cf24082-59de-4029-ac81-6e398768af3a	29522	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Cerebral cortex (Cx) - Inferior temporal gyrus - ITG
+db1d2c1b-2ee1-45d5-9d53-69a327cd77e6	31065	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Cerebral cortex (Cx) - Middle frontal gyrus (MFG) - A46
+f8dda921-5fb4-4c94-a654-c6fc346bfd6d	31899	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Cerebral cortex (Cx) - Occipitotemporal (fusiform) gyrus, temporal part (FuGt) - Temporal area TF
+20980d73-7c53-4039-b852-b76a01566d5a	33484	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Cerebral cortex (Cx) - Lingual gyrus (LiG) - Primary Visual Cortex - V1C
+9ec34295-ab16-47e2-af33-b884143e520b	49110	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Midbrain (M) - Substantia Nigra, Red Nucleus, and nearby nuclei - SN-RN
+ed33c203-233a-476a-a56b-28da945fdd32	32638	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Cerebral cortex (Cx) - Cuneus, caudal part - Peristriate Cortex - V2
+70e4f35b-c98c-45a1-9aa9-2053b07315dd	40815	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Basal forebrain (BF) - septal nuclei - SEP
+88a01d4a-5197-45be-b5ae-e019aef43376	40565	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Cerebral cortex (Cx) - Superior Temporal Gyrus - STG
+19b21f40-db42-4a71-a0d6-913e83b17784	41568	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Head of hippocampus (HiH) - Tail of Hippocampus (HiT) - Subicular cortex - Sub
+5bc23cb2-8cfc-4960-bab1-c3027fbeefc4	28155	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Hypothalamus (HTH) - mammillary region of HTH (HTHma) - mammillary nucleus - MN
+fe1a73ab-a203-45fd-84e9-0f7fd19efcbd	35285	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Amygdaloid complex (AMY) - basolateral nuclear group (BLN) - basolateral nucleus (basal nucleus) - BL
+1b767f95-d0a0-4a3d-b394-cc665d86c3dc	34933	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Extended amygdala (EXA) - Bed nucleus of stria terminalis and nearby - BNST
+3f56901c-dd4a-47d6-b60b-7b0c0111cfb2	37911	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Head of hippocampus (HiH) - Uncal CA1-CA3
+e8681d74-ac9e-4be5-be14-1cf1bbd54dd7	31307	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Thalamus (THM) - Anterior nuclear complex - ANC
+f502c312-05dc-4fd4-a762-92a63e92b539	31230	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Paleocortex (PalCx) - Anterior Olfactory Nucleus - AON
+18500fcd-9960-49cb-8a8e-7d868dc14efe	50830	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Basal nuclei (BN) - Globus pallidus (GP) - External segment of globus pallidus - GPe
+52f18bc3-52d9-487b-bf8f-f0b7aa684b09	59505	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Midbrain (M) - Substantia Nigra - SN
+7c1c3d47-3166-43e5-9a95-65ceb2d45f78	49512	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Pons (Pn) - Pontine reticular formation - PnRF
+489eaa11-c119-4a5f-b44b-81e33c80c0ef	32790	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Cerebral cortex (Cx) - Transverse temporal gyrus (TTG) - Primary auditory cortex - A1C
+900fdf13-150d-4695-9f8c-4c09105ba2eb	47416	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Pons (Pn) - efferent nuclei of cranial nerves in pons - PnEN
+4593c820-512d-4805-a10f-c0b864a7cc8c	31090	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Amygdaloid complex (AMY) - basolateral nuclear group (BLN) - basomedial nucleus (accessory basal nucleus) - BM
+4976b234-9028-4b4b-8a2f-8ac59d636219	71874	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Cerebellum (CB) - Cerebellar Vermis - CBV
+d582f63a-3c88-4e38-8cd3-8682dbe40f64	34919	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Cerebral cortex (Cx) - Posterior intermediate orbital gyrus (POrG) - Caudal division of OFCi - A13
+40318d39-3d8f-49f4-8455-a2e1365c5c5b	30132	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Basal nuclei (BN) - Nucleus Accumbens - NAC
+715327a6-7978-4896-ba91-69d6b04dbbfb	40191	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Body of hippocampus (HiB) - Rostral DG-CA4
+acae7679-d077-461c-b857-ee6ccfeb267f	39147	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Head of hippocampus (HiH) - Uncal CA1
+43b7e156-65b3-4a7b-8c7a-08528e4b21d0	38205	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Basal forebrain (BF) - substantia innominata and nearby nuclei - SI
+639ffc23-14db-4060-9027-3c90314200f8	35290	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Cerebral cortex (Cx) - Supraparietal lobule (SPL) - Posterosuperior (dorsal) parietal cortex - A5-A7
+f5a04dff-d394-4023-8811-65494e8bb11d	34416	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Basal nuclei (BN) - Putamen - Pu
+3f31f8ce-bbf6-4df8-8203-aa240ed03026	32157	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Cerebral cortex (Cx) - Cingulate gyrus, rostral (CgGr) - Ventral division of MFC - A24
+1185a7d3-a9c1-4280-9ba5-d61895b15cac	38331	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Amygdaloid complex (AMY) - corticomedial nuclear group - CMN
+ecd9230d-c571-4dab-abd3-8b54c74833f0	46453	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Thalamus (THM) - lateral nuclear complex of thalamus (LNC) - Pulvinar of thalamus - Pul
+d288b10a-643e-44bd-b451-96e9588b2ee5	39053	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Cerebral cortex (Cx) - Supramarginal gyrus (SMG) - A40
+529bb209-9d7b-44da-bfa4-f6e4745c46c2	32678	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Basal nuclei (BN) - Body of the Caudate - CaB
+31f04740-c712-4c4b-a3f8-55c0506b3034	40165	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Claustrum - Cla
+d02287f3-408b-438d-9131-999e460cbd0e	36941	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Paleocortex (PalCx) - Piriform cortex - Pir
+e6b2ce27-681b-4409-a053-2681875936e5	40144	10.1126/science.add7046	Siletti et al. (2023) Science	Supercluster: Eccentric medium spiny neuron
+46ff9dc2-3d87-4b36-91aa-ffa8aa13c52e	32745	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Cerebral cortex (Cx) - Anterior parahippocampal gyrus (AG) - Lateral entorhinal cortex - LEC
+d2514440-d747-4d8d-b2c7-b58ef8b71fbe	48856	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Thalamus (THM) - posterior nuclear complex of thalamus (PoN) - lateral geniculate nucleus (LG)
+949ec7fc-ac54-47c9-bb6f-ee9e67688cce	38937	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Cerebral cortex (Cx) - Short insular gyri - Granular insular cortex - Ig
+6ed0bb6c-a9e3-4ba6-9436-7c8fd4e206f0	38259	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Cerebral cortex (Cx) - Inferior frontal gyrus (IFG) - Ventrolateral prefrontal cortex - A44-A45
+9f499d32-400d-4c42-ac9a-fb1481844fee	56367	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Tail of Hippocampus (HiT) - Caudal Hippocampus - CA4-DGC
+56c33a38-2732-4e53-a9c1-1bc61eda9a99	38188	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Cerebral cortex (Cx) - Postcentral gyrus (PoCG) - Primary somatosensory cortex - S1C
+77c1c785-809f-4065-8c54-6a0170783256	37767	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Cerebral cortex (Cx) - Subcallosal Gyrus (SCG) - Subgenual (subcallosal) division of MFC - A25
+8f48c031-6692-4c82-b6c2-e4ad35cbc0aa	45118	10.1126/science.add7046	Siletti et al. (2023) Science	Supercluster: LAMP5-LHX6 and Chandelier
+7b316f62-7fa0-4b95-bac9-e90866038a85	42699	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Amygdaloid complex (AMY) - Central nuclear group - CEN
+d2b5efc1-14c6-4b5f-bd98-40f9084872d7	36886	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Tail of Hippocampus (HiT) - Caudal Hippocampus - CA1-CA3
+421e5f54-5de7-425f-b399-34ead0651ce1	34949	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Cerebral cortex (Cx) - Frontal agranular insular cortex - FI
+a19b218b-1c0a-4618-b41f-7c216c623ec6	40677	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Cerebral cortex (Cx) - Posterior parahippocampal gyrus (PPH) - TH-TL
+c2aad8fc-b63b-4f9b-9cfd-baf7bc9c1771	37642	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Cerebral cortex (Cx) - Temporal pole (TP) - Temporopolar area - A38
+27d91086-cfe3-4e33-9282-bd1246e5ce8e	39696	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Cerebral cortex (Cx) - Long insular gyri (LIG) - Dysgranular insular cortex - Idg
+7db0c178-b0a4-442f-ba54-e9e1633a84bb	42834	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Cerebral cortex (Cx) - Parietal operculum (PaO) - Gustatory cortex - A43
+2185eb07-22e2-4209-b3c8-7111afc6aa90	105734	10.1126/science.add7046	Siletti et al. (2023) Science	Supercluster: Oligodendrocyte precursor
+04a23820-ffa8-4be5-9f65-64db15631d1e	137162	10.1126/science.add7046	Siletti et al. (2023) Science	Supercluster: Upper rhombic lip
+52ea546e-9229-40ef-b048-a2e694dd73e8	50362	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Cerebral cortex (Cx) - Anterior parahippocampal gyrus, posterior part (APH) - Medial entorhinal cortex - MEC
+6538ce1b-7949-405f-b01c-a2c3e876baee	52650	10.1126/science.add7046	Siletti et al. (2023) Science	Supercluster: Lower rhombic lip
+a56f1a6b-071c-4780-9832-33ca9b8fb391	67533	10.1126/science.add7046	Siletti et al. (2023) Science	Supercluster: Hippocampal dentate gyrus
+f7d003d4-40d5-4de8-858c-a9a8b48fcc67	155025	10.1126/science.add7046	Siletti et al. (2023) Science	Supercluster: Astrocyte
+caf8670f-e647-4f0c-bfba-163aa84ce602	78396	10.1126/science.add7046	Siletti et al. (2023) Science	Supercluster: Deep-layer corticothalamic and 6b
+e1f595f6-ba2c-495e-9bee-7056f116b1e4	107301	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Cerebral cortex (Cx) - Middle Temporal Gyrus - MTG
+7a0a8891-9a22-4549-a55b-c2aca23c3a2a	74979	10.1126/science.add7046	Siletti et al. (2023) Science	Supercluster: Hippocampal CA1-3
+8ba5453f-7fab-4702-a3a6-4021b1f31a7a	85546	10.1126/science.add7046	Siletti et al. (2023) Science	Supercluster: Thalamic excitatory
+2190bd4d-3be0-4bf7-8ca8-8d6f71228936	126782	10.1126/science.add7046	Siletti et al. (2023) Science	Supercluster: Midbrain-derived inhibitory
+f32c2c13-bb1a-4ffd-a457-60b64ecfa4cb	116576	10.1126/science.add7046	Siletti et al. (2023) Science	Dissection: Cerebral cortex (Cx) - Precentral gyrus (PrCG) - Primary motor cortex - M1C
+c202b243-1aa1-4b16-bc9a-b36241f3b1e3	109452	10.1126/science.add7046	Siletti et al. (2023) Science	Supercluster: Amygdala excitatory
+c4b03352-af8d-492a-8d6b-40f304e0a122	152189	10.1126/science.add7046	Siletti et al. (2023) Science	Supercluster: Medium spiny neuron
+bdb26abd-f4ba-4ea3-8862-c2340e7a4f55	227671	10.1126/science.add7046	Siletti et al. (2023) Science	Supercluster: CGE interneuron
+40e79234-65e8-45e9-b555-5c663154a108	490246	10.1126/science.add7046	Siletti et al. (2023) Science	Supercluster: Oligodendrocyte
+e4710a02-8abc-48d5-a3e8-9ae7e9d79bdb	222434	10.1126/science.add7046	Siletti et al. (2023) Science	Supercluster: MGE interneuron
+98113e7e-f586-4065-a26a-60aa702f8d1c	228467	10.1126/science.add7046	Siletti et al. (2023) Science	Supercluster: Deep-layer intratelencephalic
+3a7f3ab4-a280-4b3b-b2c0-6dd05614a78c	291833	10.1126/science.add7046	Siletti et al. (2023) Science	Supercluster: Splatter
+0325478a-9b52-45b5-b40a-2e2ab0d72eb1	455006	10.1126/science.add7046	Siletti et al. (2023) Science	Supercluster: Upper-layer intratelencephalic
+mouse_mammary_epi_noPal	32713	10.1038/s42003-021-02201-2	Saeki et al. (2021) Nat Commun Biol	Mammary cell gene expression atlas links epithelial cell remodeling events to breast carcinogenesis
+c888b684-6c51-431f-972a-6c963044cef0	338564	10.1101/2022.08.27.505439	Ruiz-Moreno et al. (2022) bioRxiv	Core GBmap

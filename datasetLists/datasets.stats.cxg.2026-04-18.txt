@@ -1,0 +1,21 @@
+# CellxGENE dataset summary — 2026-04-18
+
+[totals]
+datasets	2090
+total_cells	260754238
+
+[is_primary_data]
+False	792
+Mixed	101
+True	1197
+
+[organism]
+Homo sapiens	1563
+Mus musculus	419
+Danio rerio	32
+Microcebus murinus	27
+Callithrix jacchus	27
+Macaca mulatta	19
+Sus scrofa	1
+Pan troglodytes	1
+Sus scrofa domesticus	1

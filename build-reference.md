@@ -197,10 +197,10 @@ Copy the notes the site shows into `data-explorer/wrangling_notes/<reference_uui
 
 ## Running on courtyard (GI shared machine)
 
-- **Working directory:** run everything from `/public/groups/hausslerlab/people/jzhu2` (repo, `datasetLists/`, `UCE_brain_512_npy_obs/` live there). The home directory has a ~31 GB quota; large outputs there fail with "Disk quota exceeded".
+- **Working directory:** run everything from `/public/groups/hausslerlab/people/jzhu2` (repo and `UCE_brain_512_npy_obs/` live there; `datasetLists/` is in the repo, `FM_wrangling/datasetLists/`, and the scripts find it next to themselves). The home directory has a ~31 GB quota; large outputs there fail with "Disk quota exceeded".
 - **Staging:** there is no `/nvme`; pass `--staging-dir /data/scratch/jzhu2` to `combineEmbedding.py` (local disk, files not accessed for 14 days are deleted automatically).
 - **Threads:** cap NumPy/sklearn jobs with `OMP_NUM_THREADS=16 OPENBLAS_NUM_THREADS=16 MKL_NUM_THREADS=16` (see PCA above).
-- **No AVX:** the CPU (Xeon E7-4830) cannot run `tiledbsoma` / `cellxgene_census` ("Illegal instruction"). `combineEmbedding.py` reads CELLxGENE metadata from the newest `datasetLists/datasets.info.cxg.*.txt` instead; refresh it with `datasetLists/fetch_cxg_datasets.py`.
+- **No AVX:** the CPU (Xeon E7-4830) cannot run `tiledbsoma` / `cellxgene_census` ("Illegal instruction"). `combineEmbedding.py` reads CELLxGENE metadata from the newest `datasetLists/datasets.info.cxg.*.txt` instead; refresh it with `FM_wrangling/datasetLists/fetch_cxg_datasets.py` (writes into that folder by default).
 - **Long jobs:** start them in `screen` so they survive the terminal closing.
 
 ### UCE brain 512 (`--embedding uce_brain_512`)
