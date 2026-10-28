@@ -55,7 +55,6 @@ SKIP_COLS = {
     "singler_celltype_ontology", "scimilarity_celltype_ontology",
     "consensus_celltype_ontology", "collection_doi",
     "consensus_celltype_annotation",
-    "n_genes",
     "x", "y",
     "x_ccf", "y_ccf", "z_ccf",
     "x_section", "y_section", "z_section",
@@ -74,7 +73,7 @@ def classify_column(col, series):
     n_total = len(series)
     null_rate = series.isnull().sum() / n_total
     n_unique = series.nunique()
-    is_numeric = pd.api.types.is_float_dtype(series)
+    is_numeric = np.issubdtype(series.dtype, np.number)  # ints too (counts like n_genes), as in buildPyramidConfig.py
     feature_type = "continuous" if (is_numeric and n_unique > 20 and col.lower() not in FORCE_CATEGORY) else "category"
 
     if null_rate > 0.5:
