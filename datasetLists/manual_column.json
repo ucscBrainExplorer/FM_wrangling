@@ -402,5 +402,237 @@
     },
     "collection_doi_label": "Aizarani et al. (2019) Nature",
     "dataset_title": "A human liver cell atlas reveals heterogeneity and epithelial progenitors"
+  },
+  "WMB-10Xv2": {
+    "cell_type": {
+      "value": "subclass",
+      "type": "column"
+    },
+    "organism": {
+      "value": "Mus musculus",
+      "type": "static"
+    },
+    "organism_ontology_term_id": {
+      "value": "NCBITaxon:10090",
+      "type": "static"
+    },
+    "tissue": {
+      "value": "region_of_interest_name",
+      "type": "column"
+    },
+    "assay": {
+      "value": "10x 3' v2",
+      "type": "static"
+    },
+    "assay_ontology_term_id": {
+      "value": "EFO:0009899",
+      "type": "static"
+    },
+    "donor_id": {
+      "value": "donor_label",
+      "type": "column"
+    },
+    "sex": {
+      "type": "map",
+      "value": "donor_sex",
+      "map": {
+        "M": "male",
+        "F": "female"
+      }
+    },
+    "sex_ontology_term_id": {
+      "type": "map",
+      "value": "donor_sex",
+      "map": {
+        "M": "PATO:0000384",
+        "F": "PATO:0000383"
+      }
+    },
+    "suspension_type": {
+      "value": "cell",
+      "type": "static"
+    },
+    "tissue_type": {
+      "value": "tissue",
+      "type": "static"
+    },
+    "collection_doi_label": "Yao et al. (2023) Nature",
+    "dataset_title": "Allen whole mouse brain 10x v2"
+  },
+  "WMB-10Xv3": {
+    "cell_type": {
+      "value": "subclass",
+      "type": "column"
+    },
+    "organism": {
+      "value": "Mus musculus",
+      "type": "static"
+    },
+    "organism_ontology_term_id": {
+      "value": "NCBITaxon:10090",
+      "type": "static"
+    },
+    "tissue": {
+      "value": "region_of_interest_name",
+      "type": "column"
+    },
+    "assay": {
+      "value": "10x 3' v3",
+      "type": "static"
+    },
+    "assay_ontology_term_id": {
+      "value": "EFO:0009922",
+      "type": "static"
+    },
+    "donor_id": {
+      "value": "donor_label",
+      "type": "column"
+    },
+    "sex": {
+      "type": "map",
+      "value": "donor_sex",
+      "map": {
+        "M": "male",
+        "F": "female"
+      }
+    },
+    "sex_ontology_term_id": {
+      "type": "map",
+      "value": "donor_sex",
+      "map": {
+        "M": "PATO:0000384",
+        "F": "PATO:0000383"
+      }
+    },
+    "suspension_type": {
+      "value": "cell",
+      "type": "static"
+    },
+    "tissue_type": {
+      "value": "tissue",
+      "type": "static"
+    },
+    "collection_doi_label": "Yao et al. (2023) Nature",
+    "dataset_title": "Allen whole mouse brain 10x v3"
+  },
+  "Zhuang-ABCA-1_73c39ba5": {
+    "cell_type": {
+      "value": "subclass",
+      "type": "column"
+    },
+    "organism": {
+      "value": "Mus musculus",
+      "type": "static"
+    },
+    "organism_ontology_term_id": {
+      "value": "NCBITaxon:10090",
+      "type": "static"
+    },
+    "collection_doi_label": "Zhang et al. (2023) Nature",
+    "dataset_title": "Zhuang whole mouse brain MERFISH, mouse 1, coronal"
+  },
+  "Zhuang-ABCA-2_836fc2fc": {
+    "cell_type": {
+      "value": "subclass",
+      "type": "column"
+    },
+    "organism": {
+      "value": "Mus musculus",
+      "type": "static"
+    },
+    "organism_ontology_term_id": {
+      "value": "NCBITaxon:10090",
+      "type": "static"
+    },
+    "collection_doi_label": "Zhang et al. (2023) Nature",
+    "dataset_title": "Zhuang whole mouse brain MERFISH, mouse 2, coronal"
+  },
+  "Zhuang-ABCA-3_20de7fd1": {
+    "cell_type": {
+      "value": "subclass",
+      "type": "column"
+    },
+    "organism": {
+      "value": "Mus musculus",
+      "type": "static"
+    },
+    "organism_ontology_term_id": {
+      "value": "NCBITaxon:10090",
+      "type": "static"
+    },
+    "collection_doi_label": "Zhang et al. (2023) Nature",
+    "dataset_title": "Zhuang whole mouse brain MERFISH, mouse 3, sagittal"
+  },
+  "Zhuang-ABCA-4_30a2789f": {
+    "cell_type": {
+      "value": "subclass",
+      "type": "column"
+    },
+    "organism": {
+      "value": "Mus musculus",
+      "type": "static"
+    },
+    "organism_ontology_term_id": {
+      "value": "NCBITaxon:10090",
+      "type": "static"
+    },
+    "collection_doi_label": "Zhang et al. (2023) Nature",
+    "dataset_title": "Zhuang whole mouse brain MERFISH, mouse 4, sagittal"
+  },
+  "Allen-MERFISH-C57BL6J-638850": {
+    "cell_type": {
+      "value": "subclass",
+      "type": "column"
+    },
+    "organism": {
+      "value": "Mus musculus",
+      "type": "static"
+    },
+    "organism_ontology_term_id": {
+      "value": "NCBITaxon:10090",
+      "type": "static"
+    },
+    "tissue": {
+      "value": "parcellation_division_name",
+      "type": "column"
+    },
+    "assay": {
+      "value": "MERFISH",
+      "type": "static"
+    },
+    "assay_ontology_term_id": {
+      "value": "EFO:0008992",
+      "type": "static"
+    },
+    "donor_id": {
+      "value": "donor_label",
+      "type": "column"
+    },
+    "sex": {
+      "type": "map",
+      "value": "donor_sex",
+      "map": {
+        "M": "male",
+        "F": "female"
+      }
+    },
+    "sex_ontology_term_id": {
+      "type": "map",
+      "value": "donor_sex",
+      "map": {
+        "M": "PATO:0000384",
+        "F": "PATO:0000383"
+      }
+    },
+    "suspension_type": {
+      "value": "na",
+      "type": "static"
+    },
+    "tissue_type": {
+      "value": "tissue",
+      "type": "static"
+    },
+    "collection_doi_label": "Yao et al. (2023) Nature",
+    "dataset_title": "Allen whole mouse brain MERFISH, mouse C57BL6J-638850"
   }
 }
