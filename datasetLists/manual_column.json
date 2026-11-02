@@ -404,10 +404,6 @@
     "dataset_title": "A human liver cell atlas reveals heterogeneity and epithelial progenitors"
   },
   "WMB-10Xv2": {
-    "cell_type": {
-      "value": "subclass",
-      "type": "column"
-    },
     "organism": {
       "value": "Mus musculus",
       "type": "static"
@@ -460,10 +456,6 @@
     "dataset_title": "Allen whole mouse brain 10x v2"
   },
   "WMB-10Xv3": {
-    "cell_type": {
-      "value": "subclass",
-      "type": "column"
-    },
     "organism": {
       "value": "Mus musculus",
       "type": "static"
@@ -516,10 +508,6 @@
     "dataset_title": "Allen whole mouse brain 10x v3"
   },
   "Zhuang-ABCA-1_73c39ba5": {
-    "cell_type": {
-      "value": "subclass",
-      "type": "column"
-    },
     "organism": {
       "value": "Mus musculus",
       "type": "static"
@@ -532,10 +520,6 @@
     "dataset_title": "Zhuang whole mouse brain MERFISH, mouse 1, coronal"
   },
   "Zhuang-ABCA-2_836fc2fc": {
-    "cell_type": {
-      "value": "subclass",
-      "type": "column"
-    },
     "organism": {
       "value": "Mus musculus",
       "type": "static"
@@ -548,10 +532,6 @@
     "dataset_title": "Zhuang whole mouse brain MERFISH, mouse 2, coronal"
   },
   "Zhuang-ABCA-3_20de7fd1": {
-    "cell_type": {
-      "value": "subclass",
-      "type": "column"
-    },
     "organism": {
       "value": "Mus musculus",
       "type": "static"
@@ -564,10 +544,6 @@
     "dataset_title": "Zhuang whole mouse brain MERFISH, mouse 3, sagittal"
   },
   "Zhuang-ABCA-4_30a2789f": {
-    "cell_type": {
-      "value": "subclass",
-      "type": "column"
-    },
     "organism": {
       "value": "Mus musculus",
       "type": "static"
@@ -580,10 +556,6 @@
     "dataset_title": "Zhuang whole mouse brain MERFISH, mouse 4, sagittal"
   },
   "Allen-MERFISH-C57BL6J-638850": {
-    "cell_type": {
-      "value": "subclass",
-      "type": "column"
-    },
     "organism": {
       "value": "Mus musculus",
       "type": "static"

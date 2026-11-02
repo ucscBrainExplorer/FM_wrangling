@@ -67,7 +67,7 @@ if args.columns:
 # Candidate columns for auto-pinning the primary cell label, if --pinned isn't given
 CELL_LABEL_CANDIDATES = [
     "harmonized_cell_label", "custom_cell_type", "cell_type", "celltype",
-    "cell_type_annotation", "author_cell_type",
+    "cell_type_annotation", "author_cell_type", "subclass",
 ]
 
 # When --columns restricts the build, only read those columns off disk (plus the
@@ -198,6 +198,9 @@ if args.pinned:
     pinned = args.pinned
 else:
     pinned = next((c for c in CELL_LABEL_CANDIDATES if c in obs.columns), None)
+    # subclass only replaces cell_type when it covers more cells (e.g. only some datasets of the cohort have a cell_type)
+    if pinned == "cell_type" and "subclass" in obs.columns and obs["subclass"].notna().sum() > obs["cell_type"].notna().sum():
+        pinned = "subclass"
 
 # Classify all candidate columns
 eligible = {}   # col -> feature_type

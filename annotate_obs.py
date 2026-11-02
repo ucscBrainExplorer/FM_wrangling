@@ -847,7 +847,8 @@ summary["organism_ontology_term_id"] = safeGetUniqueLabelCounts(meta_data, "orga
 summary["normalized_age_bucket_ontology_term_id"] = normalized_age_bucket_ontology_term_id_summary
 
 # cell_type and cell_type_ontology_term_id
-# Priority: harmonized_subclass > harmonized_cell_type > harmonized_cell_label > mapped_cell_label > custom_cell_type > cell_type
+# Priority: harmonized_subclass > harmonized_cell_type > harmonized_cell_label > mapped_cell_label > custom_cell_type >
+# subclass, if it covers more cells than cell_type > cell_type
 # harmonized_subclass: cross-study subclass labels added to obs (no Cell Ontology terms)
 if "harmonized_subclass" in meta_data.columns:
     summary["cell_type"] = getUniqueLabelCounts(meta_data, "harmonized_subclass")
@@ -877,6 +878,16 @@ elif "custom_cell_type" in meta_data.columns:
     summary["cell_type"] = getUniqueLabelCounts(meta_data, "custom_cell_type")
     summary["cell_type_ontology_term_id"] = getUniqueLabelCounts(meta_data, "custom_cell_type_ontology_term_id")
     note = "'custom_cell_type' is used to generate the cell_type distribution"
+    fwrangle.write(f"{note}\n")
+    fwrangle.flush()
+    print(note)
+elif "subclass" in meta_data.columns and (
+        "cell_type" not in meta_data.columns
+        or meta_data["subclass"].notna().sum() > meta_data["cell_type"].notna().sum()):
+    # subclass covers more cells than cell_type (e.g. only some datasets of the cohort have a cell_type)
+    summary["cell_type"] = getUniqueLabelCounts(meta_data, "subclass")
+    summary["cell_type_ontology_term_id"] = []
+    note = "'subclass' is used to generate the cell_type distribution (no cell type ontology terms)"
     fwrangle.write(f"{note}\n")
     fwrangle.flush()
     print(note)

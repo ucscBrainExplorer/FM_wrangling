@@ -63,7 +63,7 @@ SKIP_COLS = {
 
 CELL_LABEL_CANDIDATES = [
     "harmonized_cell_label", "cell_type", "celltype", "cell_label",
-    "cell_type_annotation", "author_cell_type",
+    "cell_type_annotation", "author_cell_type", "subclass",
 ]
 
 FORCE_CATEGORY = {"cluster"}
@@ -185,6 +185,9 @@ X_swapped = X_umap @ swap_xy_matrix
 # ── build column dict (same ordering as buildPyramidConfig.py) ────────────────
 
 pinned = next((c for c in CELL_LABEL_CANDIDATES if c in obs.columns), None)
+# subclass only replaces cell_type when it covers more cells (e.g. only some datasets of the cohort have a cell_type)
+if pinned == "cell_type" and "subclass" in obs.columns and obs["subclass"].notna().sum() > obs["cell_type"].notna().sum():
+    pinned = "subclass"
 pinned_extra = [c for c in args.pin if c in obs.columns]
 for c in args.pin:
     if c not in obs.columns:
