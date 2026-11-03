@@ -225,6 +225,12 @@ Copy the notes the site shows into `data-explorer/wrangling_notes/<reference_uui
 - `getEmbeddingfromS3.py --embedding uce_brain_768_bican` reads `s3://latentbrain/UCE_brain_768_bican/*_ucebrain768bican_adata.h5ad` (obsm `X_ucebrain768bican`) into `UCE_brain_768_bican_npy_obs/`; `combineEmbedding.py` writes a 768-dim `uce.h5`.
 - KNN: 768 is divisible by 128 and 256 but not 320, so `ivfpq_320` fails here too.
 
+### UCE brain 768 BICAN post-trained (`--embedding uce_brain_768_bican_pt`)
+
+- Same flow as UCE brain 768 BICAN, for the `ucebrain768bicanpt` model (`ucebrain768bican` + post-training steps; see `submit_jobs.py` in RunFoundationModelNRP).
+- `getEmbeddingfromS3.py --embedding uce_brain_768_bican_pt` reads `s3://latentbrain/UCE_brain_768_bican_pt/*_ucebrain768bicanpt_adata.h5ad` (obsm `X_ucebrain768bicanpt`) into `UCE_brain_768_bican_pt_npy_obs/`.
+- Its embeddings differ from `ucebrain768bican`: do not combine the two or reuse that model's PCA, KNN, species directions or PUMAP.
+
 ### Provenance (all embeddings)
 
 - `getEmbeddingfromS3.py` writes `<id>_provenance.json` (source h5ad URL, `source_verified`, pipeline commits, bf16/fp32 chunk counts, and the model's `uns["<method>_provenance"]`, e.g. uce-brain commit) next to each `.npy`.
