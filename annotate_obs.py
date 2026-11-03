@@ -508,7 +508,20 @@ with open(system_prompt_file_normalized_organism, "w") as f:
 
 # ---------- normalized developmental stage information ----------
 # normalized_age_bucket_summary and normalized_age_bucket_ontology_term_id_summary for the summary json
-# human specific
+# The prompt and its buckets are human specific, so only human stages go to OpenAI; other organisms use assign_age_buckets
+
+# development_stage labels that mean adult in a non-human organism
+NONHUMAN_ADULT_STAGES = {"adult", "adult stage", "post-juvenile adult stage"}
+
+def assign_age_buckets(stage, is_human, human_bucket, human_term):
+    """Per-cell (bucket, ontology term) from development_stage. Human cells use the {stage: value} dicts from
+    OpenAI. Non-human adult stages are adult_unspecified / UBERON:0000113 (post-juvenile adult stage, the general
+    adult term, used by some macaque and marmoset datasets on CELLxGENE); any other non-human stage is unknown, as
+    human age buckets do not apply."""
+    adult = stage.astype(str).str.strip().str.lower().isin(NONHUMAN_ADULT_STAGES)
+    bucket = stage.map(human_bucket).where(is_human, adult.map({True: "adult_unspecified", False: "unknown"}))
+    term = stage.map(human_term).where(is_human, adult.map({True: "UBERON:0000113", False: "unknown"}))
+    return bucket, term
 
 system_prompt = """
 You are a biological metadata normalization assistant.
@@ -665,11 +678,12 @@ Do not include explanations or commentary.
 """
 
 # Step 1:
+is_human = meta_data["normalized_organism"].eq("Homo sapiens")
 stage_group_cols = [c for c in ["development_stage_ontology_term_id", "development_stage"]
                     if c in meta_data.columns]
 
 development_stage_counts = (
-    meta_data
+    meta_data[is_human]
     .groupby(stage_group_cols, dropna=False)
     .size()
     .reset_index(name="count")
@@ -678,61 +692,71 @@ development_stage_counts = (
 if "development_stage_ontology_term_id" not in development_stage_counts.columns:
     development_stage_counts["development_stage_ontology_term_id"] = None
 
-development_stage_entries = development_stage_counts.to_dict(orient="records")
+# a cohort with no human cells needs no OpenAI request
+if not is_human.any():
+    normalized_age_bucket = pd.DataFrame(columns=["development_stage", "normalized_age_bucket",
+                                                  "normalized_age_bucket_ontology_term_id"])
+else:
+    development_stage_entries = development_stage_counts.to_dict(orient="records")
 
-user_message = {
-    "development_stage_entries": development_stage_entries
-}
+    user_message = {
+        "development_stage_entries": development_stage_entries
+    }
 
-client = OpenAI()
+    client = OpenAI()
 
-print("Sending development stage request to OpenAI...", flush=True)
-response = client.responses.create(
-    model="gpt-4.1",
-    input=[
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": json.dumps(user_message)}
-    ]
-)
-print("Response received.", flush=True)
+    print("Sending development stage request to OpenAI...", flush=True)
+    response = client.responses.create(
+        model="gpt-4.1",
+        input=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": json.dumps(user_message)}
+        ]
+    )
+    print("Response received.", flush=True)
 
-# Extract JSON from the response
-content = response.output_text.strip()
-# strip markdown fences if present
-if content.startswith("```"):
-    content = content.split("\n", 1)[-1]
-    content = content.rsplit("```", 1)[0].strip()
+    # Extract JSON from the response
+    content = response.output_text.strip()
+    # strip markdown fences if present
+    if content.startswith("```"):
+        content = content.split("\n", 1)[-1]
+        content = content.rsplit("```", 1)[0].strip()
 
-if not content:
-    print("ERROR: empty response from OpenAI. Full response object:")
-    print(response)
-    sys.exit(1)
-annotations = json.loads(content)["annotations"]
-# Convert back to DataFrame
-normalized_age_bucket = pd.DataFrame(annotations)
+    if not content:
+        print("ERROR: empty response from OpenAI. Full response object:")
+        print(response)
+        sys.exit(1)
+    annotations = json.loads(content)["annotations"]
+    # Convert back to DataFrame
+    normalized_age_bucket = pd.DataFrame(annotations)
 
-# Write note only after successful parse
-note = f"Populate 'normalized_age_bucket' using OpenAI gpt-4.1 model with 'system_prompt_normalized_age_bucket.txt'"
-fwrangle.write(f"{note}\n")
-fwrangle.flush()
+    # Write note only after successful parse
+    note = f"Populate 'normalized_age_bucket' using OpenAI gpt-4.1 model with 'system_prompt_normalized_age_bucket.txt'"
+    fwrangle.write(f"{note}\n")
+    fwrangle.flush()
 
-# QA
-qa_cols = [c for c in ["development_stage", "development_stage_ontology_term_id",
-                       "normalized_age_bucket", "normalized_age_bucket_ontology_term_id"]
-           if c in normalized_age_bucket.columns]
-print(normalized_age_bucket[qa_cols].to_string(index=False))
+    # QA
+    qa_cols = [c for c in ["development_stage", "development_stage_ontology_term_id",
+                           "normalized_age_bucket", "normalized_age_bucket_ontology_term_id"]
+               if c in normalized_age_bucket.columns]
+    print(normalized_age_bucket[qa_cols].to_string(index=False))
+
+# Per-cell bucket and term, by organism (for the summary, without modifying meta_data)
+cell_age_bucket, cell_age_term = assign_age_buckets(
+    meta_data["development_stage"], is_human,
+    dict(zip(normalized_age_bucket["development_stage"], normalized_age_bucket["normalized_age_bucket"])),
+    dict(zip(normalized_age_bucket["development_stage"], normalized_age_bucket["normalized_age_bucket_ontology_term_id"])))
+if (~is_human).any():
+    note = ("Non-human cells: normalized_age_bucket assigned by rule, not OpenAI: adult stages are adult_unspecified "
+            "(UBERON:0000113, post-juvenile adult stage), other stages unknown; "
+            f"{(cell_age_bucket[~is_human] == 'adult_unspecified').sum():,} adult and "
+            f"{(cell_age_bucket[~is_human] == 'unknown').sum():,} unknown of {(~is_human).sum():,} non-human cells")
+    fwrangle.write(f"{note}\n")
+    fwrangle.flush()
+    print(note)
 
 # Step 2: normalized_age_bucket_summary
-# Create a mapping from development_stage -> normalized_age_bucket
-stage_to_bucket = dict(
-    zip(
-        normalized_age_bucket["development_stage"],
-        normalized_age_bucket["normalized_age_bucket"]
-    )
-)
-
-# Map normalized_age_bucket for summary (without modifying meta_data)
-mapped_buckets = meta_data["development_stage"].map(stage_to_bucket)
+mapped_buckets = cell_age_bucket
 
 # Count occurrences
 counts = mapped_buckets.value_counts().rename_axis("label").reset_index(name="count")
@@ -767,16 +791,7 @@ normalized_age_bucket_summary = (
 )
 
 # Step 3: normalized_age_bucket_ontology_term_id_summary
-# Create a mapping from development_stage -> normalized_age_bucket_ontology_id
-stage_to_bucket = dict(
-    zip(
-        normalized_age_bucket["development_stage"],
-        normalized_age_bucket["normalized_age_bucket_ontology_term_id"]
-    )
-)
-
-# Map normalized_age_bucket for summary (without modifying meta_data)
-mapped_buckets = meta_data["development_stage"].map(stage_to_bucket)
+mapped_buckets = cell_age_term
 
 # Count occurrences
 counts = mapped_buckets.value_counts().rename_axis("label").reset_index(name="count")
