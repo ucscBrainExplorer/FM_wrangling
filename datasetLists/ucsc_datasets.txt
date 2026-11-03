@@ -27,3 +27,6 @@ Zhuang-ABCA-2_836fc2fc	1915592	10.1038/s41586-023-06808-9	Zhang et al. (2023) Na
 Zhuang-ABCA-3_20de7fd1	2081549	10.1038/s41586-023-06808-9	Zhang et al. (2023) Nature	Zhuang whole mouse brain MERFISH, mouse 3, sagittal	https://cellxgene.cziscience.com/collections/0cca8620-8dee-45d0-aef5-23f032a5cf09
 Zhuang-ABCA-4_30a2789f	215278	10.1038/s41586-023-06808-9	Zhang et al. (2023) Nature	Zhuang whole mouse brain MERFISH, mouse 4, sagittal	https://cellxgene.cziscience.com/collections/0cca8620-8dee-45d0-aef5-23f032a5cf09
 Allen-MERFISH-C57BL6J-638850	3938808	10.1038/s41586-023-06812-z	Yao et al. (2023) Nature	Allen whole mouse brain MERFISH, mouse C57BL6J-638850	s3://allen-brain-cell-atlas/expression_matrices/MERFISH-C57BL6J-638850/20230830/C57BL6J-638850-raw.h5ad
+subsample_500K_BICAN	75375		BICAN Basal Ganglia	500K subsample: BICAN basal ganglia	s3://ucsc-h5ad/subsample_500K_BICAN.h5ad
+subsample_500K_SEA-AD	179167	10.1038/s41593-024-01774-5	Gabitto et al. (2024) Nat Neurosci	500K subsample: SEA-AD MTG and DLPFC	s3://ucsc-h5ad/subsample_500K_SEA-AD.h5ad
+subsample_500K_Siletti	245458	10.1126/science.add7046	Siletti et al. (2023) Science	500K subsample: Siletti human brain	s3://ucsc-h5ad/subsample_500K_Siletti.h5ad
