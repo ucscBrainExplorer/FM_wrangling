@@ -5,8 +5,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     "--embedding",
     required=True,
-    choices=["uce", "uce_brain_512", "uce_brain_768_bican", "scimilarity"],
-    help="Embedding type to use (uce, uce_brain_512, uce_brain_768_bican or scimilarity)"
+    choices=["uce", "uce_brain_512", "uce_brain_768_bican", "uce_brain_768_bican_pt", "scimilarity"],
+    help="Embedding type to use (uce, uce_brain_512, uce_brain_768_bican, uce_brain_768_bican_pt or scimilarity)"
 )
 
 args = parser.parse_args()
@@ -56,6 +56,13 @@ elif embedding == "uce_brain_768_bican":
     bucket_prefix = "UCE_brain_768_bican/"
     file_suffix = "_ucebrain768bican_adata.h5ad"
     obsm_key = "X_ucebrain768bican"
+    embedding = "uce"  # same as uce_brain_512
+elif embedding == "uce_brain_768_bican_pt":
+    results_dir = "UCE_brain_768_bican_pt_npy_obs"
+    duplicate_dir = "duplicate_UCE_brain_768_bican_pt"
+    bucket_prefix = "UCE_brain_768_bican_pt/"
+    file_suffix = "_ucebrain768bicanpt_adata.h5ad"
+    obsm_key = "X_ucebrain768bicanpt"
     embedding = "uce"  # same as uce_brain_512
 elif embedding == "scimilarity":
     results_dir = "SCimilarity_npy_obs"
