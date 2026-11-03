@@ -773,7 +773,7 @@ for singleDir in data_dirs:
                     primary_filter = "applied"
                 else:
                     mask_primary = np.ones(len(uce_chunk), dtype=bool)
-                    primary_filter = ("not applied: UCSC dataset" if dataset_id in ucsc_datasets else
+                    primary_filter = ("not applied: not a CELLxGENE dataset" if dataset_id in ucsc_datasets else
                                       f"not applied: listed in {cgCensus_non_primary_file}"
                                       if dataset_id in cgCensus_non_primary_datasets else
                                       "not applied: no is_primary_data column")
