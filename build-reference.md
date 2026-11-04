@@ -7,55 +7,97 @@ Given a set of wrangled h5ads with UCE embeddings, build a PUMAP reference atlas
 The pipeline has two phases:
 
 **Phase 1 — Build the reference** (this skill)
-1. Combine embeddings with `combineEmbedding.py --shuffle`, then annotate obs with `annotate_obs.py`
+1. Combine embeddings with `combineEmbedding.py --shuffle`
 2. PCA + KNN (run in parallel)
 3. Train PUMAP
-4. Build pyramid
-5. Add the reference to data-explorer
+4. Review obs, update `manual_column.json`, annotate with `annotate_obs.py`
+5. Build pyramid
+6. Add the reference to data-explorer
 
 **Phase 2 — Map query data onto the reference**
 - Use `map_newdata.py` to project new datasets onto the finished reference → arrow files
+
+## Where to run
+
+Two parts run on NRP, exchanging files with `<WORK>/<ATLAS_DIR>/` through `s3://latentbrain/<ATLAS_DIR>/`:
+
+- KNN (Step 2): a large CPU Job (48 cores, 360 GB RAM), launched from a RunKNN clone
+- PUMAP training (Step 3): a GPU pod running JupyterLab
+
+Everything else (Step 1, PCA in Step 2, Steps 4–6) runs on courtyard (see
+[below](#running-on-courtyard-gi-shared-machine)), from one working directory, `<WORK>`, that holds:
+
+- `FM_wrangling/` — a clone of this repo (`datasetLists/` is inside it; the scripts find it next to themselves)
+- `<NPY_DIR>/` and `<DUP_DIR>/` — per-dataset embeddings and obs, filled by `getEmbeddingfromS3.py` (Step 1)
+- `<ATLAS_DIR>/` — one folder per reference atlas, a name you choose
+- `data-explorer/` — a clone of the data-explorer repo, for Step 6
+
+`<EMBEDDING>` below is the `--embedding` value of `getEmbeddingfromS3.py` and `combineEmbedding.py`: our name for
+the foundation model the datasets were embedded with in
+[RunFoundationModelNRP](https://github.com/ucscBrainExplorer/RunFoundationModelNRP). It sets where the embeddings
+come from and which local folders hold them:
+
+| `<EMBEDDING>` | Model | Dim | Reads from S3 | `<NPY_DIR>` | `<DUP_DIR>` |
+|---|---|---|---|---|---|
+| `uce` | UCE | 1280 | `s3://latentbrain/UCE/` | `UCE_npy_obs` | `duplicate_UCE` |
+| `uce_brain_512` | UCE brain 512 | 512 | `s3://latentbrain/UCE_brain_512/` | `UCE_brain_512_npy_obs` | `duplicate_UCE_brain_512` |
+| `uce_brain_768_bican` | UCE brain 768 + BICAN anneal | 768 | `s3://latentbrain/UCE_brain_768_bican/` | `UCE_brain_768_bican_npy_obs` | `duplicate_UCE_brain_768_bican` |
+
+Run every courtyard command below from `<WORK>`.
+
+**S3 access.** `s3://latentbrain/<ATLAS_DIR>/` needs no setup: S3 has no real folders, so the first
+`aws s3 cp <file> s3://latentbrain/<ATLAS_DIR>/` creates it (`aws s3 ls s3://latentbrain/<ATLAS_DIR>/` lists it). The
+`aws` commands on courtyard need your own AWS key (ask Jing; enter it with `aws configure`, never in code or chat).
+Keys can list, read and upload but not delete: ask Jing to delete files in S3. The NRP Jobs and pods use their own
+key from the `latentbrain-aws-creds` secret.
 
 ---
 
 ## Step 1 — Combine embeddings (or shuffle a single dataset)
 
-### Multiple datasets — use `combineEmbedding.py`
-
-Run from `/mnt/efsUCE/`:
+### Get the embeddings — `getEmbeddingfromS3.py`
 
 ```bash
-python3.11 FM_wrangling/combineEmbedding.py \
-    --embedding uce \
+python3 FM_wrangling/getEmbeddingfromS3.py --embedding <EMBEDDING>
+```
+
+Downloads the embedded h5ads from `s3://latentbrain/` into `<NPY_DIR>/` as `<id>_uce.npy`, the obs table
+and `<id>_provenance.json` (see [Provenance](#provenance-all-embeddings)). Datasets already there are skipped.
+
+### Multiple datasets — use `combineEmbedding.py`
+
+```bash
+python3 FM_wrangling/combineEmbedding.py \
+    --embedding <EMBEDDING> \
     --results_dir <ATLAS_DIR>/ \
     --select-datasets-file <ATLAS_DIR>/dataset_ids.tsv \
     --shuffle
 ```
 
-- `dataset_ids.tsv` — one dataset per line, two tab-separated columns, no header: dataset ID (matching npy filenames in
-  `UCE_npy_obs/`) and the exact source h5ad URL the embedding was run on (`s3://…` or `https://…`), e.g.
-  `8e10f1c4-8e98-41e5-b65f-8cd89a887122<TAB>s3://cellxgene-census-public-us-west-2/cell-census/2025-11-17/h5ads/8e10f1c4-8e98-41e5-b65f-8cd89a887122.h5ad`.
-  The URL is recorded automatically: `RunFoundationModelNRP/fixed_pipeline.py` stores it in each output h5ad as
-  `uns["source_url"]`, `getEmbeddingfromS3.py` writes it as `source_url` in `<id>_provenance.json` next to the npy, and `combineEmbedding.py`
-  takes it from there when column 2 is empty, stops if a URL is missing or the two disagree, and writes the filled-in
-  file to `<ATLAS_DIR>/dataset_ids.tsv`. Datasets embedded before this have `source_url` = `unknown` (or no `_provenance.json`), so
-  give their URL in column 2, with its release date, never "latest". `annotate_obs.py` takes the URLs for
-  `metadata_summary.json` from this file and stops if any dataset is missing one.
+- `--select-datasets-file` — the datasets to combine, one dataset ID per line (matching the npy file names in
+  `<NPY_DIR>/`); no header, lines starting with `#` are skipped. A line can add `<TAB>` and the exact source
+  h5ad URL the embedding was run on (`s3://…` or `https://…`, with its release date, never "latest"), but this is
+  only needed for datasets embedded before URLs were recorded: `RunFoundationModelNRP/fixed_pipeline.py` stores the
+  URL in each output h5ad as `uns["source_url"]`, and `getEmbeddingfromS3.py` copies it into `<id>_provenance.json`.
+  The script stops if a dataset has no URL either way, or if the two disagree.
+- It writes `<ATLAS_DIR>/dataset_ids.tsv` with the URLs filled in (dataset ID `<TAB>` URL); when the select file is
+  that same path, as above, it is rewritten in place. `annotate_obs.py` reads the URLs for `metadata_summary.json`
+  from it.
 - `--shuffle` writes a new `shuffle_index.npy` and shuffles `uce.h5` and `obs.tsv.gz` in sync
 - Verify output: cell count matches expectation, `obs.tsv.gz` contains expected columns
 
 On startup the script validates that:
-- All datasets in `duplicate_UCE/` (or `duplicate_SCimilarity/`) are listed in `datasetLists/ignore_datasets.txt`
-- All `ucsc-*` prefixed datasets in `UCE_npy_obs/` and `duplicate_UCE/` are listed in `datasetLists/ucsc_datasets.txt`
+- All datasets in `<DUP_DIR>/` are listed in `datasetLists/ignore_datasets.txt`
+- All `ucsc-*` prefixed datasets in `<NPY_DIR>/` and `<DUP_DIR>/` are listed in `datasetLists/ucsc_datasets.txt`
 
 ### Single dataset — use `shuffle.py` directly
 
 If only one dataset needs to be shuffled (no combine step needed):
 
 ```bash
-/usr/bin/python3.11 FM_wrangling/utils/shuffle.py \
-    --uce-in UCE_npy_obs/<dataset_id>_uce.npy \
-    --obs-in UCE_npy_obs/<dataset_id>_obs.tsv \
+python3 FM_wrangling/utils/shuffle.py \
+    --uce-in <NPY_DIR>/<dataset_id>_uce.npy \
+    --obs-in <NPY_DIR>/<dataset_id>_obs.tsv \
     --out-dir <ATLAS_DIR>
 ```
 
@@ -63,45 +105,21 @@ Writes `<ATLAS_DIR>/uce.h5` (uncompressed), `obs.tsv.gz` and `shuffle_index.npy`
 
 Use `--chunked` if RAM is constrained: RAM drops to ~32 bytes/row plus one read block, but `--nvme-dir` needs free space equal to the full uncompressed array. `--chunked` requires `.h5` input; if the source h5 has tiny chunks (e.g. `combined_UCE_56M/uce.h5`), copy it to `/nvme` first and shuffle the copy.
 
-### Annotate obs and write the metadata summary — `annotate_obs.py`
-
-Run from the same directory as `combineEmbedding.py`, after it:
-
-```bash
-python3 FM_wrangling/annotate_obs.py --data_dir <ATLAS_DIR>
-```
-
-- Reads `<ATLAS_DIR>/obs.tsv.gz` and `dataset_ids.tsv`, plus `datasetLists/` (`ucsc_datasets.txt`, `manual_column.json`, newest `datasets.info.cxg.*.txt`).
-- Writes `obs_annotated.tsv.gz`, `metadata_summary.json`, `wrangling_notes_annotation.txt` and the two `system_prompt_*.txt` files.
-- Normalizes organism and development stage (age bucket) with OpenAI gpt-4.1; needs `OPENAI_API_KEY` in `.env` in the run directory. The two mappings are printed for checking.
-- Keeps the hand-filled fields of an existing `metadata_summary.json` (`reference_name`, `reference_uuid`, `version_label`, `reference_pyramid`, `foundation_model`, `abstract`); everything else is regenerated.
-- `--output_dir <DIR>` writes the outputs elsewhere (still reading the hand-filled fields from `<ATLAS_DIR>`), to compare a re-run before replacing the files.
-
 ## Step 2 — PCA and KNN (run in parallel)
 
 ### KNN (NRP cluster)
 
-First copy `uce.h5` to S3:
+Copy `uce.h5` to S3, then launch the job from a clone of [RunKNN](https://github.com/ucscBrainExplorer/RunKNN):
 ```bash
-aws s3 cp scpca_glioma_shuffled/uce.h5 s3://latentbrain/scpca_glioma_shuffled/uce.h5
+aws s3 cp <ATLAS_DIR>/uce.h5 s3://latentbrain/<ATLAS_DIR>/uce.h5
+cd ../RunKNN
+./run_pipeline_knn_job.sh <ATLAS_DIR>                    # k=30, ivfflat
+./run_pipeline_knn_job.sh <ATLAS_DIR> 30 ivfflat ivfpq_128   # or several index types
 ```
 
-Then submit two KNN jobs (ivfflat and ivfpq_320) to the NRP cluster:
-```bash
-cd ../RunKnnNRP
-bash run_pipeline_knn_job.sh
-```
-
-The script is pre-configured for `DIR_NAME=scpca_glioma_shuffled` and `EMBEDDING=uce`. It submits Kubernetes jobs that pull `uce.h5` from `s3://latentbrain/scpca_glioma_shuffled/` and build the KNN indices.
-
-When the jobs complete, copy outputs back:
-```bash
-aws s3 cp s3://latentbrain/scpca_glioma_shuffled/knn_30.npz scpca_glioma_shuffled/
-aws s3 cp s3://latentbrain/scpca_glioma_shuffled/index_ivfflat.faiss scpca_glioma_shuffled/
-aws s3 cp s3://latentbrain/scpca_glioma_shuffled/index_ivfpq_320.faiss scpca_glioma_shuffled/
-```
-
-Outputs: `knn_30.npz`, `index_ivfflat.faiss`, `index_ivfpq_320.faiss`
+Each index type is one Kubernetes Job (`uce-job-knn-<dir>-k<K>-<index>`) that reads `uce.h5` from
+`s3://latentbrain/<ATLAS_DIR>/` and writes back next to it: `index_<INDEX_TYPE>.faiss`, `knn_<K>_<INDEX_TYPE>.npz`.
+PUMAP training reads the KNN file from S3, so it does not need to be copied to `<WORK>`.
 
 ### PCA
 
@@ -114,7 +132,10 @@ Runs IncrementalPCA (50 components) on `uce.h5` in streaming chunks. Options:
 - `--chunk_size` — rows per chunk (default: 100,000; set to 10,000 for small atlases <100k cells to avoid an h5py chunk shape error)
 - `--group_name` — optional suffix for output filenames
 
-Outputs: `ipca_model.pkl`, `pca.h5`
+Outputs: `ipca_model.pkl`, `pca.h5`. Copy them to S3 for PUMAP training, with `obs.tsv.gz` for its plots:
+```bash
+for f in pca.h5 ipca_model.pkl obs.tsv.gz; do aws s3 cp <ATLAS_DIR>/$f s3://latentbrain/<ATLAS_DIR>/$f; done
+```
 
 On a shared machine (e.g. courtyard), cap the BLAS threads — by default NumPy uses every core (a 7.1M × 512 run took ~34 of courtyard's 64 cores), and IncrementalPCA gains little beyond ~16:
 ```bash
@@ -124,15 +145,17 @@ OMP_NUM_THREADS=16 OPENBLAS_NUM_THREADS=16 MKL_NUM_THREADS=16 \
 
 ## Step 3 — Train PUMAP
 
-Requires a GPU machine: an AWS GPU instance (spin it up manually), or an NRP GPU pod with inputs and
-outputs in S3 (see [README.md](README.md#train-pumap-on-an-nrp-gpu-pod)). Run via Jupyter notebook.
-
-Open `/mnt/efsUCE/3_trainPUMAPmodel.ipynb`. Set parameters at the top:
+Runs on an NRP GPU pod in JupyterLab, with inputs and outputs in `s3://latentbrain/<ATLAS_DIR>/`: see
+[README.md](README.md#train-pumap-on-an-nrp-gpu-pod) for starting the pod. Open `3_trainPUMAPmodel.ipynb` and set
+cell 2:
 ```python
-results_dir = "/mnt/efsUCE/scpca_glioma_shuffled"
-existing_model_iteration = 0   # 0 = start fresh; N = resume from pytorch_eN.pkl
+results_dir = "s3://latentbrain/<ATLAS_DIR>/"
+embedding_h5_file = "pca.h5"
+knn_outfile = "knn_30_ivfflat.npz"
+existing_model_iteration = 0   # 0 = start fresh; N = resume from pytorch{tag}_eN.pkl
 epochs = 10                    # epochs to train (or add) in this run
 k = 10                         # KNN neighbors used for PUMAP (subset of knn_30)
+run_tag = ""                   # goes into every output name; use a new one for each try
 ```
 
 The notebook trains PUMAP on the PCA-transformed embeddings using the precomputed KNN. Training is incremental — run multiple times to add epochs, saving a checkpoint each time (`pytorch_e{total}.pkl`). After training it transforms all cells and auto-detects if axes need swapping (width > height).
@@ -142,18 +165,83 @@ Outputs per run:
 - `transform_e{N}.json` — transform config used by `map_newdata.py`: the PUMAP model and ipca model file names (looked up next to the JSON, so keep them in the same folder), swap_xy_matrix, and for the record the training inputs `pca_file` and `knn_file`
 - `umap_e{N}.npy` — 2D UMAP coordinates for all reference cells
 
-## Step 4 — Build pyramid
+(with a `run_tag`, e.g. `pytorch_k1_e{N}.pkl`). The last cell, `push(results_dir)`, uploads them to S3; copy the ones
+you keep back to `<WORK>` for Step 5 and `map_newdata`:
+```bash
+for f in pytorch_e{N}.pkl transform_e{N}.json umap_e{N}.npy; do aws s3 cp s3://latentbrain/<ATLAS_DIR>/$f <ATLAS_DIR>/; done
+```
+
+## Step 4 — Annotate obs and write the metadata summary — `annotate_obs.py`
+
+Usually done after PUMAP training, once the map looks right. It works on `<ATLAS_DIR>/obs.tsv.gz` from Step 1 and does
+not touch the embeddings, so it can be rerun as often as needed.
+
+### Review obs and fill in `manual_column.json`
+
+Look through `obs.tsv.gz` (with Claude) for columns that are missing, empty or named differently in some datasets,
+and add rules for them to `FM_wrangling/datasetLists/manual_column.json`. Rules are keyed by dataset ID, then by the
+obs column to fill. Three types, e.g.:
+
+```json
+"8e10f1c4-8e98-41e5-b65f-8cd89a887122": {
+    "cell_type": {"type": "column", "value": "supercluster_term"},
+    "organism":  {"type": "static", "value": "Homo sapiens"}
+},
+"ucsc-2e934674-0669-4d8a-9faa-9d37078f8bb6": {
+    "cell_type_ontology_term_id": {"type": "map", "value": "Subclass",
+                                   "map": {"Astrocyte": "CL:0000127", "ACx MEIS2 GABA": null}}
+}
+```
+
+- `column`: copy another column of that dataset (here its cell types are in `supercluster_term`)
+- `static`: one value for every cell of that dataset
+- `map`: translate the values of a column (`value`) through `map`; `null` leaves it empty
+- optional `"note"`: copied into the wrangling notes the site shows
+
+The file is in the repo, so commit and push the change (the next atlas build uses the same rules).
+`annotate_obs.py` applies the rules to `obs.tsv.gz` itself, so after adding one, just rerun it: no need to rerun
+`combineEmbedding.py` or retrain.
+
+### Run it
+
+```bash
+python3 FM_wrangling/annotate_obs.py --data_dir <ATLAS_DIR>
+```
+
+- Reads `<ATLAS_DIR>/obs.tsv.gz` and `dataset_ids.tsv`, plus `datasetLists/` (`ucsc_datasets.txt`, `manual_column.json`, newest `datasets.info.cxg.*.txt`).
+- Writes `obs_annotated.tsv.gz`, `metadata_summary.json`, `wrangling_notes_annotation.txt` and the two `system_prompt_*.txt` files.
+- Normalizes organism and development stage (age bucket) with OpenAI gpt-4.1; needs `OPENAI_API_KEY` in `.env` in the run directory. The two mappings are printed for checking.
+- Keeps the hand-filled fields of an existing `metadata_summary.json` (`reference_name`, `reference_uuid`, `version_label`, `reference_pyramid`, `foundation_model`, `abstract`); everything else is regenerated.
+- `--output_dir <DIR>` writes the outputs elsewhere (still reading the hand-filled fields from `<ATLAS_DIR>`), to compare a re-run before replacing the files.
+
+## Step 5 — Build pyramid
 
 ### Generate pyramid config
 
-Run from `/mnt/efsUCE/`:
 ```bash
 python3 FM_wrangling/buildPyramidConfig.py \
     --results_dir <ATLAS_DIR> \
-    --umap_file umap_e{N}.npy
+    --umap_file umap_e{N}.npy \
+    --metadata_file obs_annotated.tsv.gz
 ```
 
-This auto-generates `<ATLAS_DIR>/pyramid_e{N}_config.json` with all eligible obs columns ranked by biological relevance. HIGH_PRIORITY columns (`harmonized_cell_label`, `sample_label`, `author_label`, `disease`, `suspension_type`, `assay`, `development_stage`, `tissue`, `collection_doi_label`) are always included regardless of cardinality or null rate. `harmonized_cell_label` is pinned first; `sample_label` is pinned second.
+Use the annotated obs from Step 4, which has the `normalized_*` columns; without `--metadata_file` the script reads
+the unannotated `obs.tsv.gz`. The file name is saved in the config, so `buildPyramid.py` uses the same one.
+
+This auto-generates `<ATLAS_DIR>/pyramid_e{N}_config.json` listing the obs columns to show, in this order:
+
+1. **The cell label, pinned first:** the first of `harmonized_subclass`, `harmonized_cell_type`,
+   `harmonized_cell_label`, `mapped_cell_label`, `custom_cell_type`, `subclass` (only if it covers more cells than
+   `cell_type`), `cell_type` present in the obs. The list is `CELL_LABEL_PRIORITY` in `cell_label.py`, which
+   `annotate_obs.py` also uses for the cell-type counts in `metadata_summary.json`, so the map and the site's summary
+   use the same column. Check which one was picked in the printed summary; `--pinned <column>` overrides it.
+2. **HIGH_PRIORITY columns**, always included regardless of null rate or number of categories, in alphabetical order
+   (the list is `HIGH_PRIORITY` in `buildPyramidConfig.py`: always `sample_label` and `donor_id`, plus e.g. `assay`,
+   `disease`, `tissue`, `normalized_organism`).
+3. **Every other eligible column**, alphabetically: at most 50% null (within at least one collection), and for text
+   columns fewer categories than a tenth of the cells.
+
+`--columns a,b,c` limits the config to those columns.
 
 Fill in before building the tiles:
 - `reference_name` — human-readable name
@@ -169,7 +257,6 @@ find <target_dir> -mindepth 1 -delete
 
 ### Build the tiles
 
-Run from `/mnt/efsUCE/` (or wherever `FM_wrangling/` and `<ATLAS_DIR>` sit):
 ```bash
 python3 FM_wrangling/buildPyramid.py \
     --results_dir <ATLAS_DIR> \
@@ -184,7 +271,7 @@ Options:
 
 Output: ~60 PNG tiles per feature + `metadata.json` in `target_dir`
 
-## Step 5 — Add the reference to data-explorer — `merge_metadata_summary.py`
+## Step 6 — Add the reference to data-explorer — `merge_metadata_summary.py`
 
 Set `reference_pyramid` in `<ATLAS_DIR>/metadata_summary.json` to the pyramid's public URL, then merge it into the data-explorer metadata list:
 
@@ -203,8 +290,20 @@ Copy the notes the site shows into `data-explorer/wrangling_notes/<reference_uui
 
 ## Running on courtyard (GI shared machine)
 
-- **Working directory:** run everything from `/public/groups/hausslerlab/people/jzhu2` (repo and `UCE_brain_512_npy_obs/` live there; `datasetLists/` is in the repo, `FM_wrangling/datasetLists/`, and the scripts find it next to themselves). The home directory has a ~31 GB quota; large outputs there fail with "Disk quota exceeded".
-- **Staging:** there is no `/nvme`; pass `--staging-dir /data/scratch/jzhu2` to `combineEmbedding.py` (local disk, files not accessed for 14 days are deleted automatically).
+- **Working directory:** today `<WORK>` is `/public/groups/hausslerlab/people/jzhu2`, which holds Jing's repo clones
+  and the `*_npy_obs/` folders. The plan is to split code from data: each person keeps their own repo clones in
+  `/public/groups/hausslerlab/people/<name>/` (so one person's `git pull` or edits don't change the other's runs),
+  and the `*_npy_obs/` folders and atlases move to one shared, group-writable data folder that becomes `<WORK>`.
+  Commands then run from the shared folder and call your own clone, e.g.
+  `python3 /public/groups/hausslerlab/people/$USER/FM_wrangling/combineEmbedding.py ...`.
+  Don't write large outputs to your home directory: it has a ~31 GB quota, and going over fails with "Disk quota exceeded".
+- **Staging (scratch space):** `combineEmbedding.py` first writes its big outputs (`uce.h5`, `obs.tsv.gz`, and with
+  `--shuffle` a temporary copy of the whole embedding matrix) to a fast local disk, then moves them into
+  `<ATLAS_DIR>/`. That disk is `--staging-dir`, default `/nvme` (the AWS machine's local SSD), which courtyard does not
+  have. Use your own folder on courtyard's local scratch disk instead: `mkdir -p /data/scratch/$USER` once, then add
+  `--staging-dir /data/scratch/$USER` to every `combineEmbedding.py` command (and `--nvme-dir /data/scratch/$USER` to
+  `utils/shuffle.py`). It needs free space about the size of the output `uce.h5`. Files there not accessed for 14 days
+  are deleted automatically, which is fine: they are only temporary.
 - **Threads:** cap NumPy/sklearn jobs with `OMP_NUM_THREADS=16 OPENBLAS_NUM_THREADS=16 MKL_NUM_THREADS=16` (see PCA above).
 - **No AVX:** the CPU (Xeon E7-4830) cannot run `tiledbsoma` / `cellxgene_census` ("Illegal instruction"). `combineEmbedding.py` reads CELLxGENE metadata from the newest `datasetLists/datasets.info.cxg.*.txt` instead; refresh it with `FM_wrangling/datasetLists/fetch_cxg_datasets.py` (writes into that folder by default).
 - **Long jobs:** start them in `screen` so they survive the terminal closing.
@@ -218,7 +317,7 @@ Copy the notes the site shows into `data-explorer/wrangling_notes/<reference_uui
       --results_dir combined_UCE_5neuro_ucebrain512_shuffle_7253ea1e-e5ff-4f93-80fa-c108806fc7c6 \
       --select-datasets-file combined_UCE_5neuro_ucebrain512_shuffle_7253ea1e-e5ff-4f93-80fa-c108806fc7c6/dataset_ids.tsv \
       --obs-columns-file combined_UCE_5neuro_ucebrain512_shuffle_7253ea1e-e5ff-4f93-80fa-c108806fc7c6/obs_columns_brain.txt \
-      --staging-dir /data/scratch/jzhu2 --shuffle
+      --staging-dir /data/scratch/$USER --shuffle
   ```
 - `--obs-columns-file` (select mode only) limits obs to the listed columns, in file order; without it, select mode writes the union of all columns.
 - `datasetLists/manual_column.json` applies in both modes; rule types `static`, `column` and `map` (value translation, `null` = empty), each with an optional `note` that is copied into `wrangling_notes_combineEmbedding.txt`.
@@ -241,6 +340,6 @@ Copy the notes the site shows into `data-explorer/wrangling_notes/<reference_uui
 
 ## Reference
 
-- Script: `/mnt/efsUCE/FM_wrangling/combineEmbedding.py`
-- Query mapping: `/mnt/efsUCE/FM_wrangling/map_newdata.py`
-- Example atlas: `/mnt/efsUCE/scpca_glioma_shuffled/`
+- Scripts: this repo — `combineEmbedding.py`, `annotate_obs.py`, `runIPCA.py`, `3_trainPUMAPmodel.ipynb`,
+  `buildPyramidConfig.py`, `buildPyramid.py`; query mapping: `map_newdata.py`
+- KNN: [RunKNN](https://github.com/ucscBrainExplorer/RunKNN); embeddings: [RunFoundationModelNRP](https://github.com/ucscBrainExplorer/RunFoundationModelNRP)
