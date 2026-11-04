@@ -56,6 +56,7 @@ Use your own name, so two people can each have a pod:
 
 ```bash
 sed s/USERNAME/chris/g k8s/jupyter-pumap-job.yaml | kubectl apply -f -
+
 kubectl get pods -n braingeneers -l job-name=jupyter-pumap-chris    # Pending until a GPU frees up
 ```
 
@@ -66,7 +67,8 @@ JupyterLab. The first start takes several minutes; later ones reuse a pip cache.
 ### 4. Connect
 
 ```bash
-kubectl logs -n braingeneers job/jupyter-pumap-chris | grep "Jupyter token"
+kubectl logs -n braingeneers job/jupyter-pumap-chris | grep "Jupyter token" # you need to wait for installation finish, about 5-6min
+
 kubectl port-forward -n braingeneers job/jupyter-pumap-chris 8888:8888    # keep open
 ```
 
