@@ -27,6 +27,7 @@ from typing import Any
 import math
 from dotenv import load_dotenv
 from openai import OpenAI
+from cell_label import pick_cell_label
 load_dotenv(override=True)
 
 # ---------- set up ----------
@@ -861,54 +862,20 @@ summary["self_reported_ethnicity_ontology_term_id"] = safeGetUniqueLabelCounts(m
 summary["organism_ontology_term_id"] = safeGetUniqueLabelCounts(meta_data, "organism_ontology_term_id")
 summary["normalized_age_bucket_ontology_term_id"] = normalized_age_bucket_ontology_term_id_summary
 
-# cell_type and cell_type_ontology_term_id
-# Priority: harmonized_subclass > harmonized_cell_type > harmonized_cell_label > mapped_cell_label > custom_cell_type >
-# subclass, if it covers more cells than cell_type > cell_type
-# harmonized_subclass: cross-study subclass labels added to obs (no Cell Ontology terms)
-if "harmonized_subclass" in meta_data.columns:
-    summary["cell_type"] = getUniqueLabelCounts(meta_data, "harmonized_subclass")
-    summary["cell_type_ontology_term_id"] = []
-    note = "'harmonized_subclass' is used to generate the cell_type distribution (no cell type ontology terms)"
-    fwrangle.write(f"{note}\n")
-    print(note)
-elif "harmonized_cell_type" in meta_data.columns:
-    summary["cell_type"] = getUniqueLabelCounts(meta_data, "harmonized_cell_type")
-    summary["cell_type_ontology_term_id"] = getUniqueLabelCounts(meta_data, "harmonized_cell_type_ontology_term_id")
-    note = "'harmonized_cell_type' is used to generate the cell_type distribution"
-    fwrangle.write(f"{note}\n")
-    print(note)
-elif "harmonized_cell_label" in meta_data.columns:
-    summary["cell_type"] = getUniqueLabelCounts(meta_data, "harmonized_cell_label")
-    summary["cell_type_ontology_term_id"] = getUniqueLabelCounts(meta_data, "harmonized_cell_label_ontology_term_id")
-    note = "'harmonized_cell_label' is used to generate the cell_type distribution"
-    fwrangle.write(f"{note}\n")
-    print(note)
-elif "mapped_cell_label" in meta_data.columns:
-    summary["cell_type"] = getUniqueLabelCounts(meta_data, "mapped_cell_label")
-    summary["cell_type_ontology_term_id"] = getUniqueLabelCounts(meta_data, "mapped_cell_label_ontology_term_id")
-    note = "'mapped_cell_label' is used to generate the cell_type distribution"
-    fwrangle.write(f"{note}\n")
-    print(note)
-elif "custom_cell_type" in meta_data.columns:
-    summary["cell_type"] = getUniqueLabelCounts(meta_data, "custom_cell_type")
-    summary["cell_type_ontology_term_id"] = getUniqueLabelCounts(meta_data, "custom_cell_type_ontology_term_id")
-    note = "'custom_cell_type' is used to generate the cell_type distribution"
+# cell_type and cell_type_ontology_term_id, from the main cell label column (priority list in cell_label.py,
+# shared with buildPyramidConfig.py)
+cell_label = pick_cell_label(meta_data)
+if cell_label is None:
+    sys.exit("ERROR: no cell label column in obs (see CELL_LABEL_PRIORITY in cell_label.py)")
+summary["cell_type"] = getUniqueLabelCounts(meta_data, cell_label)
+summary["cell_type_ontology_term_id"] = safeGetUniqueLabelCounts(meta_data, f"{cell_label}_ontology_term_id")
+if cell_label != "cell_type":
+    note = f"'{cell_label}' is used to generate the cell_type distribution"
+    if not summary["cell_type_ontology_term_id"]:
+        note += " (no cell type ontology terms)"
     fwrangle.write(f"{note}\n")
     fwrangle.flush()
     print(note)
-elif "subclass" in meta_data.columns and (
-        "cell_type" not in meta_data.columns
-        or meta_data["subclass"].notna().sum() > meta_data["cell_type"].notna().sum()):
-    # subclass covers more cells than cell_type (e.g. only some datasets of the cohort have a cell_type)
-    summary["cell_type"] = getUniqueLabelCounts(meta_data, "subclass")
-    summary["cell_type_ontology_term_id"] = []
-    note = "'subclass' is used to generate the cell_type distribution (no cell type ontology terms)"
-    fwrangle.write(f"{note}\n")
-    fwrangle.flush()
-    print(note)
-else:
-    summary["cell_type"] = getUniqueLabelCounts(meta_data, "cell_type")
-    summary["cell_type_ontology_term_id"] = safeGetUniqueLabelCounts(meta_data, "cell_type_ontology_term_id")
 
 # if there is mapping doc, add at the end
 if os.path.exists(mapped_doc_file):

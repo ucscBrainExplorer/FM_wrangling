@@ -26,6 +26,8 @@ import os
 import numpy as np
 import pandas as pd
 
+from cell_label import CELL_LABEL_PRIORITY, pick_cell_label
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--results_dir", required=True,
                     help="Directory containing umap .npy and obs file")
@@ -64,11 +66,9 @@ if args.columns:
         raise ValueError(f"--columns entries not found in {obs_path}: {missing}\n"
                          f"Available columns: {header_cols}")
 
-# Candidate columns for auto-pinning the primary cell label, if --pinned isn't given
-CELL_LABEL_CANDIDATES = [
-    "harmonized_cell_label", "custom_cell_type", "cell_type", "celltype",
-    "cell_type_annotation", "author_cell_type", "subclass",
-]
+# Candidate columns for auto-pinning the primary cell label, if --pinned isn't given:
+# the same priority as annotate_obs.py (cell_label.py)
+CELL_LABEL_CANDIDATES = CELL_LABEL_PRIORITY
 
 # When --columns restricts the build, only read those columns off disk (plus the
 # pinned label / label candidates, so auto-pinning still works) instead of the
@@ -121,9 +121,9 @@ SKIP_COLS = {
 }
 
 # High-priority columns — always included, listed before alphabetical remainder
-# sample_label is ordered first within this group (after the pinned cell label)
 HIGH_PRIORITY = {
     "sample_label",
+    "donor_id",
     "harmonized_cell_label",
     "author_label",
     "disease",
@@ -197,10 +197,7 @@ def classify_column(col, series):
 if args.pinned:
     pinned = args.pinned
 else:
-    pinned = next((c for c in CELL_LABEL_CANDIDATES if c in obs.columns), None)
-    # subclass only replaces cell_type when it covers more cells (e.g. only some datasets of the cohort have a cell_type)
-    if pinned == "cell_type" and "subclass" in obs.columns and obs["subclass"].notna().sum() > obs["cell_type"].notna().sum():
-        pinned = "subclass"
+    pinned = pick_cell_label(obs)
 
 # Classify all candidate columns
 eligible = {}   # col -> feature_type
@@ -216,10 +213,8 @@ for col in candidate_cols:
     else:
         rejected.append((col, reason))
 
-# Build selection: pinned cell label → sample_label → other HIGH_PRIORITY (alpha) → rest (alpha)
-high_priority_cols = sorted(
-    [c for c in eligible if c in HIGH_PRIORITY and c != "sample_label"]
-)
+# Build selection: pinned cell label → HIGH_PRIORITY (alpha) → rest (alpha)
+high_priority_cols = sorted(c for c in eligible if c in HIGH_PRIORITY)
 rest_cols = sorted([c for c in eligible if c not in HIGH_PRIORITY])
 
 selected = []
