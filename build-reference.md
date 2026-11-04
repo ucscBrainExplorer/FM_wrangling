@@ -124,7 +124,8 @@ OMP_NUM_THREADS=16 OPENBLAS_NUM_THREADS=16 MKL_NUM_THREADS=16 \
 
 ## Step 3 — Train PUMAP
 
-Requires a GPU machine (spin up an AWS GPU instance manually). Run via Jupyter notebook.
+Requires a GPU machine: an AWS GPU instance (spin it up manually), or an NRP GPU pod with inputs and
+outputs in S3 (see [README.md](README.md#train-pumap-on-an-nrp-gpu-pod)). Run via Jupyter notebook.
 
 Open `/mnt/efsUCE/3_trainPUMAPmodel.ipynb`. Set parameters at the top:
 ```python
