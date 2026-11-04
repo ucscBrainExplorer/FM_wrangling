@@ -8,14 +8,19 @@
 workdir() copies files from the S3 prefix into a local folder and returns it,
 so h5py, np.load, joblib and load_pumap read ordinary files. With files=,
 only those names are fetched (names missing in S3 are skipped), otherwise
-every file directly under the prefix. push() uploads the folder's files back
-to the prefix they came from. For a local path, workdir() returns it as is and
+every file directly under the prefix. push() uploads the files this session
+created in the folder back to the prefix they came from. For a local path, workdir() returns it as is and
 push() does nothing.
 
 Nothing is ever overwritten or deleted, on either side: workdir() fetches only
 files missing locally and push() uploads only files missing in S3. A file
 present on both sides with a different size is left alone with a warning;
 rename or remove one copy to resolve it.
+
+push() skips files that were already in the local folder when workdir() first
+ran in this kernel, so a file deleted from S3 is not re-uploaded from an old
+cache copy. Outputs from before a kernel restart count as old: copy them up
+with `aws s3 cp` if needed.
 
 s3://<bucket>/<prefix>/ goes to <root>/<prefix>/. <root> is $S3DIR_ROOT
 (/mnt/pvc in the NRP jupyter-pumap pod), else ~/s3cache.
@@ -24,7 +29,7 @@ import json
 import os
 import subprocess
 
-# local folder -> the S3 prefix workdir() filled it from, for push()
+# local folder -> (bucket, prefix, files already there), for push()
 _origin = {}
 
 
@@ -60,6 +65,9 @@ def workdir(path, files=None):
     s3 = f"s3://{bucket}/{prefix}/"
     local = os.path.join(_root(), prefix) + "/"
     os.makedirs(local, exist_ok=True)
+    key = os.path.abspath(local)
+    # first call in this kernel: what was there before, so push() skips it
+    old = _origin[key][2] if key in _origin else set(os.listdir(local))
     remote = _s3_files(bucket, prefix)
     for name in (files if files is not None else remote):
         if name not in remote:
@@ -68,23 +76,27 @@ def workdir(path, files=None):
             _cp(s3 + name, local + name)
         elif os.path.getsize(local + name) != remote[name]:
             _differs(name, os.path.getsize(local + name), remote[name])
-    _origin[os.path.abspath(local)] = (bucket, prefix)
+    _origin[key] = (bucket, prefix, old)
     return local
 
 
 def push(local_dir):
-    """Upload the files in a workdir() folder that its S3 prefix lacks."""
+    """Upload the files created in a workdir() folder since it was set up that
+    its S3 prefix lacks."""
     origin = _origin.get(os.path.abspath(local_dir))
     if origin is None:
         print(f"{local_dir} did not come from workdir('s3://...'); nothing to push", flush=True)
         return
-    bucket, prefix = origin
+    bucket, prefix, old = origin
     remote = _s3_files(bucket, prefix)
     for name in sorted(os.listdir(local_dir)):
         local = os.path.join(local_dir, name)
         if not os.path.isfile(local):
             continue
-        if name not in remote:
+        if name in old:
+            if name not in remote:
+                print(f"{name}: in the cache from before, not in S3; not uploaded", flush=True)
+        elif name not in remote:
             _cp(local, f"s3://{bucket}/{prefix}/{name}")
         elif os.path.getsize(local) != remote[name]:
             _differs(name, os.path.getsize(local), remote[name])

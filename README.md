@@ -47,7 +47,10 @@ run_tag = "try1"               # new tag for each try; goes into every output na
 At the end of cell 2, `workdir()` ([s3dir.py](s3dir.py)) copies just the files training
 reads into the pod; the last cell, `push(results_dir)`, uploads the new outputs. Neither
 ever overwrites a file: if an output with the same name is already in S3, `push` warns and
-skips it, so use a new `run_tag` (or more epochs) for each try. A local path such as
+skips it, so use a new `run_tag` (or more epochs) for each try. `push` uploads only files
+made since the kernel started, so a file you delete from S3 is not re-uploaded from the
+pod's cache on `/mnt/pvc` (restarting the kernel mid-run makes earlier outputs count as
+old). A local path such as
 `/mnt/efsUCE/...` still works on the AWS GPU instance as before.
 
 ### 3. Start the pod
