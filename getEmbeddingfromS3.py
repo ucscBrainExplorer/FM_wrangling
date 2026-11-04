@@ -316,7 +316,9 @@ def process_files_via_h5 (
     dataset_id,
 ):
     # --- Setup paths ---
-    embedding_path_h5 = f"download_{embedding}.h5"
+    # temporary, one per dataset and process: a fixed name in the current folder let two
+    # downloads running in the same (shared) folder overwrite each other's file
+    embedding_path_h5 = os.path.join(results_dir, f".download_{dataset_id}_{os.getpid()}.h5")
     if embedding == "uce":
         embedding_path_npy = os.path.join(results_dir, f"{dataset_id}_uce.npy")
     elif embedding == "scimilarity":
@@ -411,6 +413,7 @@ def process_files_via_h5 (
             mmap_array[row_start:row_end] = src[row_start:row_end]
         mmap_array.flush()
         del mmap_array
+    os.remove(embedding_path_h5)
     saveSource(dataset_id, results_dir, unses, nan_chunks)
     print(f"Saved final NumPy array: {embedding_path_npy}")
     print(f"Saved metadata TSV: {obs_path}")
