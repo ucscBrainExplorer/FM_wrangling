@@ -155,7 +155,7 @@ python3 FM_wrangling/buildPyramidConfig.py \
 
 This auto-generates `<ATLAS_DIR>/pyramid_e{N}_config.json` with all eligible obs columns ranked by biological relevance. HIGH_PRIORITY columns (`harmonized_cell_label`, `sample_label`, `author_label`, `disease`, `suspension_type`, `assay`, `development_stage`, `tissue`, `collection_doi_label`) are always included regardless of cardinality or null rate. `harmonized_cell_label` is pinned first; `sample_label` is pinned second.
 
-Fill in before running the notebook:
+Fill in before building the tiles:
 - `reference_name` — human-readable name
 - `target_dir` — where tiles will be written
 - These can be copied from a prior config if rebuilding
@@ -167,15 +167,20 @@ Clear everything in `target_dir` — PNGs, arrow files, and metadata.json all be
 find <target_dir> -mindepth 1 -delete
 ```
 
-### Run the notebook
+### Build the tiles
 
-Open `/mnt/efsUCE/5_buildPyramid.ipynb`. Set at the top:
-```python
-results_dir = "<ATLAS_DIR>"
-pyramid_file = "pyramid_e{N}_config.json"
+Run from `/mnt/efsUCE/` (or wherever `FM_wrangling/` and `<ATLAS_DIR>` sit):
+```bash
+python3 FM_wrangling/buildPyramid.py \
+    --results_dir <ATLAS_DIR> \
+    --pyramid_file pyramid_e{N}_config.json
 ```
 
-The notebook auto-selects tile resolution to keep pixel loss rate <3%, builds multi-level PNG tiles for each feature, and writes `metadata.json` to `target_dir`.
+The script auto-selects tile resolution to keep pixel loss rate <3%, builds multi-level PNG tiles for each feature, and writes `metadata.json` to `target_dir` (a relative `target_dir` is taken under `<ATLAS_DIR>`).
+
+Options:
+- `--skip_top_levels N` — don't write tiles for the N highest-resolution levels (`metadata.json` still lists all levels)
+- `--metadata_only` — write `metadata.json` without building tiles
 
 Output: ~60 PNG tiles per feature + `metadata.json` in `target_dir`
 
