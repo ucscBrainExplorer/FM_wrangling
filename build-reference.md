@@ -139,7 +139,7 @@ The notebook trains PUMAP on the PCA-transformed embeddings using the precompute
 
 Outputs per run:
 - `pytorch_e{N}.pkl` — PUMAP model checkpoint
-- `transform_e{N}.json` — transform config used by `map_newdata.py` (contains paths to PUMAP model, ipca model, swap_xy_matrix)
+- `transform_e{N}.json` — transform config used by `map_newdata.py`: the PUMAP model and ipca model file names (looked up next to the JSON, so keep them in the same folder), swap_xy_matrix, and for the record the training inputs `pca_file` and `knn_file`
 - `umap_e{N}.npy` — 2D UMAP coordinates for all reference cells
 
 ## Step 4 — Build pyramid
