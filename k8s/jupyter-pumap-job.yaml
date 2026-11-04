@@ -13,7 +13,8 @@
 #
 # One Job per person (USERNAME), so two people can each have a pod.
 #
-# A Job, not a bare Pod, so an evicted pod is recreated. The first start takes
+# A Job, not a bare Pod, so an evicted pod is recreated (a failed pod is kept, with
+# its logs, until the Job is deleted). The first start takes
 # a few minutes (pip installs torch); later starts reuse the pip cache on the PVC.
 #
 #   sed s/USERNAME/chris/g k8s/jupyter-pumap-job.yaml | kubectl apply -f -
@@ -32,7 +33,7 @@ spec:
   backoffLimit: 2
   template:
     spec:
-      restartPolicy: OnFailure
+      restartPolicy: Never
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -89,8 +90,8 @@ spec:
           args:
             - |
               set -e
-              apt-get update -qq && apt-get install -y -qq git > /dev/null
-              pip install -q torch==2.8.0 --index-url https://download.pytorch.org/whl/cu126
+              DEBIAN_FRONTEND=noninteractive apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git > /dev/null
+              pip install -q torch==2.8.0+cu126 --extra-index-url https://download.pytorch.org/whl/cu126
               REPO=/work/FM_wrangling
               git clone -q --depth 1 https://github.com/ucscBrainExplorer/FM_wrangling.git "$REPO"
               git -C "$REPO" log -1 --format="FM_wrangling %h %s"

@@ -5,7 +5,7 @@
 # map_newdata_pumap.ipynb loads it (courtyard), use the scikit-learn that saved
 # it (1.7.2 for combined_subsample_500K_ucebrain768bicanpt_shuffle; needs
 # Python >= 3.10). Install torch first, then this file:
-#   pip install torch==2.8.0 --index-url https://download.pytorch.org/whl/cu126
+#   pip install torch==2.8.0+cu126 --extra-index-url https://download.pytorch.org/whl/cu126
 #   pip install -r requirements_pumap.txt
 umap_pytorch @ git+https://github.com/ucscBrainExplorer/umap_pytorch.git@bbefedd569e9ce4cb72a47fd8900c5c82877fb2c
 pytorch_lightning==2.5.2
