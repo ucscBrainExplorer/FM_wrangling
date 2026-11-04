@@ -21,16 +21,29 @@ The pipeline has two phases:
 
 Two parts run on NRP, exchanging files with `<WORK>/<ATLAS_DIR>/` through `s3://latentbrain/<ATLAS_DIR>/`:
 
-- KNN (Step 2): a large CPU Job (48 cores, 360 GB RAM), launched from a RunKNN clone
+- KNN (Step 2): a large CPU Job (48 cores, 360 GB RAM), launched from a RunKnnNRP clone
 - PUMAP training (Step 3): a GPU pod running JupyterLab
 
 Everything else (Step 1, PCA in Step 2, Steps 4–6) runs on courtyard (see
-[below](#running-on-courtyard-gi-shared-machine)), from one working directory, `<WORK>`, that holds:
+[below](#running-on-courtyard-gi-shared-machine)). Code and data live apart there:
 
-- `FM_wrangling/` — a clone of this repo (`datasetLists/` is inside it; the scripts find it next to themselves)
-- `<NPY_DIR>/` and `<DUP_DIR>/` — per-dataset embeddings and obs, filled by `getEmbeddingfromS3.py` (Step 1)
-- `<ATLAS_DIR>/` — one folder per reference atlas, a name you choose
-- `data-explorer/` — a clone of the data-explorer repo, for Step 6
+- **Code: your own clones**, in your folder `/public/groups/hausslerlab/people/<login>/` (`<login>` = your courtyard
+  user name): `FM_wrangling/`, `RunKnnNRP/`, `data-explorer/`. Each person has their own, so one person's `git pull` or
+  edits never change another's runs. `datasetLists/` is inside `FM_wrangling/`; the scripts find it next to themselves.
+- **Data: one shared folder**, `<WORK>` = `/public/groups/hausslerlab/projects/latentbrain/`, holding
+  `<NPY_DIR>/` and `<DUP_DIR>/` (per-dataset embeddings and obs, filled by `getEmbeddingfromS3.py` in Step 1) and one
+  `<ATLAS_DIR>/` per reference atlas (a name you choose).
+
+Run every courtyard command from `<WORK>`, calling the scripts in your own clone. Set this once in `~/.bashrc`:
+```bash
+export FMW=/public/groups/hausslerlab/people/$USER/FM_wrangling
+umask 002          # files you create in the shared folder stay writable by the group
+```
+then:
+```bash
+cd /public/groups/hausslerlab/projects/latentbrain
+python3 $FMW/combineEmbedding.py ...
+```
 
 `<EMBEDDING>` below is the `--embedding` value of `getEmbeddingfromS3.py` and `combineEmbedding.py`: our name for
 the foundation model the datasets were embedded with in
@@ -42,8 +55,8 @@ come from and which local folders hold them:
 | `uce` | UCE | 1280 | `s3://latentbrain/UCE/` | `UCE_npy_obs` | `duplicate_UCE` |
 | `uce_brain_512` | UCE brain 512 | 512 | `s3://latentbrain/UCE_brain_512/` | `UCE_brain_512_npy_obs` | `duplicate_UCE_brain_512` |
 | `uce_brain_768_bican` | UCE brain 768 + BICAN anneal | 768 | `s3://latentbrain/UCE_brain_768_bican/` | `UCE_brain_768_bican_npy_obs` | `duplicate_UCE_brain_768_bican` |
+| `uce_brain_768_bican_pt` | the same + post-training aligning Siletti, BICAN BG, SEA-AD | 768 | `s3://latentbrain/UCE_brain_768_bican_pt/` | `UCE_brain_768_bican_pt_npy_obs` | `duplicate_UCE_brain_768_bican_pt` |
 
-Run every courtyard command below from `<WORK>`.
 
 **S3 access.** `s3://latentbrain/<ATLAS_DIR>/` needs no setup: S3 has no real folders, so the first
 `aws s3 cp <file> s3://latentbrain/<ATLAS_DIR>/` creates it (`aws s3 ls s3://latentbrain/<ATLAS_DIR>/` lists it). The
@@ -58,7 +71,7 @@ key from the `latentbrain-aws-creds` secret.
 ### Get the embeddings — `getEmbeddingfromS3.py`
 
 ```bash
-python3 FM_wrangling/getEmbeddingfromS3.py --embedding <EMBEDDING>
+python3 $FMW/getEmbeddingfromS3.py --embedding <EMBEDDING>
 ```
 
 Downloads the embedded h5ads from `s3://latentbrain/` into `<NPY_DIR>/` as `<id>_uce.npy`, the obs table
@@ -67,7 +80,7 @@ and `<id>_provenance.json` (see [Provenance](#provenance-all-embeddings)). Datas
 ### Multiple datasets — use `combineEmbedding.py`
 
 ```bash
-python3 FM_wrangling/combineEmbedding.py \
+python3 $FMW/combineEmbedding.py \
     --embedding <EMBEDDING> \
     --results_dir <ATLAS_DIR>/ \
     --select-datasets-file <ATLAS_DIR>/dataset_ids.tsv \
@@ -95,7 +108,7 @@ On startup the script validates that:
 If only one dataset needs to be shuffled (no combine step needed):
 
 ```bash
-python3 FM_wrangling/utils/shuffle.py \
+python3 $FMW/utils/shuffle.py \
     --uce-in <NPY_DIR>/<dataset_id>_uce.npy \
     --obs-in <NPY_DIR>/<dataset_id>_obs.tsv \
     --out-dir <ATLAS_DIR>
@@ -109,10 +122,10 @@ Use `--chunked` if RAM is constrained: RAM drops to ~32 bytes/row plus one read 
 
 ### KNN (NRP cluster)
 
-Copy `uce.h5` to S3, then launch the job from a clone of [RunKNN](https://github.com/ucscBrainExplorer/RunKNN):
+Copy `uce.h5` to S3, then launch the job from your clone of [RunKnnNRP](https://github.com/ucscBrainExplorer/RunKnnNRP):
 ```bash
 aws s3 cp <ATLAS_DIR>/uce.h5 s3://latentbrain/<ATLAS_DIR>/uce.h5
-cd ../RunKNN
+cd /public/groups/hausslerlab/people/$USER/RunKnnNRP
 ./run_pipeline_knn_job.sh <ATLAS_DIR>                    # k=30, ivfflat
 ./run_pipeline_knn_job.sh <ATLAS_DIR> 30 ivfflat ivfpq_128   # or several index types
 ```
@@ -124,7 +137,7 @@ PUMAP training reads the KNN file from S3, so it does not need to be copied to `
 ### PCA
 
 ```bash
-python3 FM_wrangling/runIPCA.py --results_dir <ATLAS_DIR>
+python3 $FMW/runIPCA.py --results_dir <ATLAS_DIR>
 ```
 
 Runs IncrementalPCA (50 components) on `uce.h5` in streaming chunks. Options:
@@ -140,7 +153,7 @@ for f in pca.h5 ipca_model.pkl obs.tsv.gz; do aws s3 cp <ATLAS_DIR>/$f s3://late
 On a shared machine (e.g. courtyard), cap the BLAS threads — by default NumPy uses every core (a 7.1M × 512 run took ~34 of courtyard's 64 cores), and IncrementalPCA gains little beyond ~16:
 ```bash
 OMP_NUM_THREADS=16 OPENBLAS_NUM_THREADS=16 MKL_NUM_THREADS=16 \
-    python3 FM_wrangling/runIPCA.py --results_dir <ATLAS_DIR>
+    python3 $FMW/runIPCA.py --results_dir <ATLAS_DIR>
 ```
 
 ## Step 3 — Train PUMAP
@@ -179,7 +192,7 @@ not touch the embeddings, so it can be rerun as often as needed.
 ### Review obs and fill in `manual_column.json`
 
 Look through `obs.tsv.gz` (with Claude) for columns that are missing, empty or named differently in some datasets,
-and add rules for them to `FM_wrangling/datasetLists/manual_column.json`. Rules are keyed by dataset ID, then by the
+and add rules for them to `datasetLists/manual_column.json` in your FM_wrangling clone. Rules are keyed by dataset ID, then by the
 obs column to fill. Three types, e.g.:
 
 ```json
@@ -205,12 +218,14 @@ The file is in the repo, so commit and push the change (the next atlas build use
 ### Run it
 
 ```bash
-python3 FM_wrangling/annotate_obs.py --data_dir <ATLAS_DIR>
+python3 $FMW/annotate_obs.py --data_dir <ATLAS_DIR>
 ```
 
 - Reads `<ATLAS_DIR>/obs.tsv.gz` and `dataset_ids.tsv`, plus `datasetLists/` (`ucsc_datasets.txt`, `manual_column.json`, newest `datasets.info.cxg.*.txt`).
 - Writes `obs_annotated.tsv.gz`, `metadata_summary.json`, `wrangling_notes_annotation.txt` and the two `system_prompt_*.txt` files.
-- Normalizes organism and development stage (age bucket) with OpenAI gpt-4.1; needs `OPENAI_API_KEY` in `.env` in the run directory. The two mappings are printed for checking.
+- Normalizes organism and development stage (age bucket) with OpenAI gpt-4.1; needs `OPENAI_API_KEY` in a `.env` file, found by searching up from the script's folder: put it in
+  `/public/groups/hausslerlab/people/<login>/.env`, readable only by you (`chmod 600`), never in the shared folder or
+  inside the clone. The two mappings are printed for checking.
 - Keeps the hand-filled fields of an existing `metadata_summary.json` (`reference_name`, `reference_uuid`, `version_label`, `reference_pyramid`, `foundation_model`, `abstract`); everything else is regenerated.
 - `--output_dir <DIR>` writes the outputs elsewhere (still reading the hand-filled fields from `<ATLAS_DIR>`), to compare a re-run before replacing the files.
 
@@ -219,7 +234,7 @@ python3 FM_wrangling/annotate_obs.py --data_dir <ATLAS_DIR>
 ### Generate pyramid config
 
 ```bash
-python3 FM_wrangling/buildPyramidConfig.py \
+python3 $FMW/buildPyramidConfig.py \
     --results_dir <ATLAS_DIR> \
     --umap_file umap_e{N}.npy \
     --metadata_file obs_annotated.tsv.gz
@@ -258,7 +273,7 @@ find <target_dir> -mindepth 1 -delete
 ### Build the tiles
 
 ```bash
-python3 FM_wrangling/buildPyramid.py \
+python3 $FMW/buildPyramid.py \
     --results_dir <ATLAS_DIR> \
     --pyramid_file pyramid_e{N}_config.json
 ```
@@ -276,13 +291,13 @@ Output: ~60 PNG tiles per feature + `metadata.json` in `target_dir`
 Set `reference_pyramid` in `<ATLAS_DIR>/metadata_summary.json` to the pyramid's public URL, then merge it into the data-explorer metadata list:
 
 ```bash
-python3 FM_wrangling/merge_metadata_summary.py data-explorer/UCSC_Brain_Explorer_metadata.json <ATLAS_DIR>/metadata_summary.json
+python3 $FMW/merge_metadata_summary.py /public/groups/hausslerlab/people/$USER/data-explorer/UCSC_Brain_Explorer_metadata.json <ATLAS_DIR>/metadata_summary.json
 ```
 
 - Matches entries by `reference_uuid`: an existing uuid is replaced whole (each field change is printed), a new uuid is appended.
 - Writes a timestamped `.bak` of the target next to it; delete it once the diff looks right.
 
-Copy the notes the site shows into `data-explorer/wrangling_notes/<reference_uuid>/`:
+Copy the notes the site shows into `wrangling_notes/<reference_uuid>/` in your data-explorer clone:
 - `<ATLAS_DIR>/wrangling_notes_annotation.txt` → `wrangling_notes.txt`
 - `system_prompt_normalized_age_bucket.txt` and `system_prompt_normalized_organism.txt`
 
@@ -290,13 +305,16 @@ Copy the notes the site shows into `data-explorer/wrangling_notes/<reference_uui
 
 ## Running on courtyard (GI shared machine)
 
-- **Working directory:** today `<WORK>` is `/public/groups/hausslerlab/people/jzhu2`, which holds Jing's repo clones
-  and the `*_npy_obs/` folders. The plan is to split code from data: each person keeps their own repo clones in
-  `/public/groups/hausslerlab/people/<name>/` (so one person's `git pull` or edits don't change the other's runs),
-  and the `*_npy_obs/` folders and atlases move to one shared, group-writable data folder that becomes `<WORK>`.
-  Commands then run from the shared folder and call your own clone, e.g.
-  `python3 /public/groups/hausslerlab/people/$USER/FM_wrangling/combineEmbedding.py ...`.
-  Don't write large outputs to your home directory: it has a ~31 GB quota, and going over fails with "Disk quota exceeded".
+- **Shared folder rules** (`<WORK>` = `/public/groups/hausslerlab/projects/latentbrain/`, see
+  [Where to run](#where-to-run)):
+  - `umask 002`, so the other person can update what you create.
+  - `git pull` your FM_wrangling clone before `combineEmbedding.py` or `annotate_obs.py`, so everyone uses the same
+    `datasetLists/` (`manual_column.json`, `ignore_datasets.txt`, ...).
+  - When an atlas is finished, make it read-only: `chmod -R g-w <ATLAS_DIR>`.
+  - Your folder under `people/` is readable by everyone by default: keep files you don't mean to share (`.env`, keys)
+    private with `chmod 600`.
+- **Home directory:** don't write large outputs there: it has a ~31 GB quota, and going over fails with "Disk quota
+  exceeded".
 - **Staging (scratch space):** `combineEmbedding.py` first writes its big outputs (`uce.h5`, `obs.tsv.gz`, and with
   `--shuffle` a temporary copy of the whole embedding matrix) to a fast local disk, then moves them into
   `<ATLAS_DIR>/`. That disk is `--staging-dir`, default `/nvme` (the AWS machine's local SSD), which courtyard does not
@@ -305,7 +323,7 @@ Copy the notes the site shows into `data-explorer/wrangling_notes/<reference_uui
   `utils/shuffle.py`). It needs free space about the size of the output `uce.h5`. Files there not accessed for 14 days
   are deleted automatically, which is fine: they are only temporary.
 - **Threads:** cap NumPy/sklearn jobs with `OMP_NUM_THREADS=16 OPENBLAS_NUM_THREADS=16 MKL_NUM_THREADS=16` (see PCA above).
-- **No AVX:** the CPU (Xeon E7-4830) cannot run `tiledbsoma` / `cellxgene_census` ("Illegal instruction"). `combineEmbedding.py` reads CELLxGENE metadata from the newest `datasetLists/datasets.info.cxg.*.txt` instead; refresh it with `FM_wrangling/datasetLists/fetch_cxg_datasets.py` (writes into that folder by default).
+- **No AVX:** the CPU (Xeon E7-4830) cannot run `tiledbsoma` / `cellxgene_census` ("Illegal instruction"). `combineEmbedding.py` reads CELLxGENE metadata from the newest `datasetLists/datasets.info.cxg.*.txt` instead; refresh it with `$FMW/datasetLists/fetch_cxg_datasets.py` (writes into that folder by default).
 - **Long jobs:** start them in `screen` so they survive the terminal closing.
 
 ### UCE brain 512 (`--embedding uce_brain_512`)
@@ -313,7 +331,7 @@ Copy the notes the site shows into `data-explorer/wrangling_notes/<reference_uui
 - Inputs come from `UCE_brain_512_npy_obs/`; embeddings are 512-dim instead of 1280.
 - Example: `combined_UCE_5neuro_ucebrain512_shuffle_7253ea1e-e5ff-4f93-80fa-c108806fc7c6/` (5 brain datasets, 7.1M cells, ~16 min with `--shuffle`):
   ```bash
-  python3 FM_wrangling/combineEmbedding.py --embedding uce_brain_512 \
+  python3 $FMW/combineEmbedding.py --embedding uce_brain_512 \
       --results_dir combined_UCE_5neuro_ucebrain512_shuffle_7253ea1e-e5ff-4f93-80fa-c108806fc7c6 \
       --select-datasets-file combined_UCE_5neuro_ucebrain512_shuffle_7253ea1e-e5ff-4f93-80fa-c108806fc7c6/dataset_ids.tsv \
       --obs-columns-file combined_UCE_5neuro_ucebrain512_shuffle_7253ea1e-e5ff-4f93-80fa-c108806fc7c6/obs_columns_brain.txt \
@@ -348,4 +366,4 @@ Copy the notes the site shows into `data-explorer/wrangling_notes/<reference_uui
 
 - Scripts: this repo — `combineEmbedding.py`, `annotate_obs.py`, `runIPCA.py`, `3_trainPUMAPmodel.ipynb`,
   `buildPyramidConfig.py`, `buildPyramid.py`; query mapping: `map_newdata.py`
-- KNN: [RunKNN](https://github.com/ucscBrainExplorer/RunKNN); embeddings: [RunFoundationModelNRP](https://github.com/ucscBrainExplorer/RunFoundationModelNRP)
+- KNN: [RunKnnNRP](https://github.com/ucscBrainExplorer/RunKnnNRP); embeddings: [RunFoundationModelNRP](https://github.com/ucscBrainExplorer/RunFoundationModelNRP)
