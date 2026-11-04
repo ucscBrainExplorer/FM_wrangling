@@ -37,13 +37,14 @@ Everything else (Step 1, PCA in Step 2, Steps 4–6) runs on courtyard (see
 Run every courtyard command from `<WORK>`, calling the scripts in your own clone. Set this once in `~/.bashrc`:
 ```bash
 export FMW=/public/groups/hausslerlab/people/$USER/FM_wrangling
-umask 002          # files you create in the shared folder stay writable by the group
 ```
 then:
 ```bash
 cd /public/groups/hausslerlab/projects/latentbrain
 python3 $FMW/combineEmbedding.py ...
 ```
+Files created in the shared folder are writable by the `hausslerlab` group automatically, with no `umask` change:
+the folder has the setgid bit (new files get group `hausslerlab`) and a default ACL (new files are group-writable).
 
 `<EMBEDDING>` below is the `--embedding` value of `getEmbeddingfromS3.py` and `combineEmbedding.py`: our name for
 the foundation model the datasets were embedded with in
@@ -307,7 +308,8 @@ Copy the notes the site shows into `wrangling_notes/<reference_uuid>/` in your d
 
 - **Shared folder rules** (`<WORK>` = `/public/groups/hausslerlab/projects/latentbrain/`, see
   [Where to run](#where-to-run)):
-  - `umask 002`, so the other person can update what you create.
+  - New files there are group-writable automatically (setgid + default ACL). A file copied in with `cp -p` or
+    `rsync -a` keeps its old permissions: if someone can't edit it, run `chmod g+w` on it.
   - `git pull` your FM_wrangling clone before `combineEmbedding.py` or `annotate_obs.py`, so everyone uses the same
     `datasetLists/` (`manual_column.json`, `ignore_datasets.txt`, ...).
   - When an atlas is finished, make it read-only: `chmod -R g-w <ATLAS_DIR>`.
