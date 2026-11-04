@@ -1,0 +1,110 @@
+# JupyterLab on an NRP GPU for the PUMAP training notebooks, with the same
+# package versions as the AWS GPU instance (requirements_pumap.txt).
+#
+# /mnt/pvc is the pumap/ folder on the shared uce-pvc (not EFS). With results_dir
+# set to "s3://latentbrain/<prefix>/", the notebooks' workdir() (s3dir.py)
+# copies the inputs into /mnt/pvc/<prefix>/ (S3DIR_ROOT below), and
+# push(results_dir) uploads new outputs. Neither overwrites existing files.
+#
+# Develop on your laptop and git push; each pod start clones a fresh copy of
+# main onto the pod's own disk and opens JupyterLab there. Edits made in the
+# pod are scratch and vanish with it; keep changes by making them on your
+# laptop. Results persist through push(results_dir).
+#
+# One Job per person (USERNAME), so two people can each have a pod.
+#
+# A Job, not a bare Pod, so an evicted pod is recreated. The first start takes
+# a few minutes (pip installs torch); later starts reuse the pip cache on the PVC.
+#
+#   sed s/USERNAME/chris/g k8s/jupyter-pumap-job.yaml | kubectl apply -f -
+#   kubectl logs -n braingeneers -f job/jupyter-pumap-chris          # wait for the token
+#   kubectl port-forward -n braingeneers job/jupyter-pumap-chris 8888:8888
+#   open http://localhost:8888 and paste the token
+#
+# NRP flags GPUs that sit idle, so delete the Job when done (files on the PVC stay):
+#   kubectl delete job -n braingeneers jupyter-pumap-chris
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: jupyter-pumap-USERNAME
+  namespace: braingeneers
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: OnFailure
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: nvidia.com/gpu.product
+                operator: In
+                values:  # 24GB+ (training used an A10G with batch_size 2048)
+                - NVIDIA-A10
+                - NVIDIA-GeForce-RTX-3090
+                - NVIDIA-GeForce-RTX-4090
+                - NVIDIA-TITAN-RTX
+                - NVIDIA-RTX-A5000
+                - Quadro-RTX-6000
+                - Tesla-V100-SXM2-32GB
+                - NVIDIA-A40
+                - NVIDIA-L40
+                - NVIDIA-L4
+                - NVIDIA-RTX-5000-Ada-Generation
+                - Quadro-RTX-8000
+                - NVIDIA-L40S
+                - NVIDIA-RTX-A6000
+                - NVIDIA-A100-PCIE-40GB
+      containers:
+        - name: jupyter
+          image: python:3.9.23-slim
+          env:
+            - name: PIP_CACHE_DIR
+              value: /mnt/pvc/.pip-cache
+            - name: S3DIR_ROOT
+              value: /mnt/pvc
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: latentbrain-aws-creds
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: latentbrain-aws-creds
+                  key: AWS_SECRET_ACCESS_KEY
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -e
+              apt-get update -qq && apt-get install -y -qq git > /dev/null
+              pip install -q torch==2.8.0 --index-url https://download.pytorch.org/whl/cu126
+              REPO=/work/FM_wrangling
+              git clone -q --depth 1 https://github.com/ucscBrainExplorer/FM_wrangling.git "$REPO"
+              git -C "$REPO" log -1 --format="FM_wrangling %h %s"
+              pip install -q -r "$REPO/requirements_pumap.txt" awscli
+              nvidia-smi
+              TOKEN=$(python -c "import secrets; print(secrets.token_hex(24))")
+              echo "=============================================="
+              echo "Jupyter token: ${TOKEN}"
+              echo "=============================================="
+              jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root \
+                --ServerApp.token="${TOKEN}" --notebook-dir="$REPO"
+          volumeMounts:
+            - name: shared-data
+              mountPath: /mnt/pvc
+              subPath: pumap
+          resources:
+            requests:
+              nvidia.com/gpu: 1
+              cpu: 4
+              memory: 64Gi
+            limits:
+              nvidia.com/gpu: 1
+              cpu: 4800m
+              memory: 64Gi
+      volumes:
+        - name: shared-data
+          persistentVolumeClaim:
+            claimName: uce-pvc

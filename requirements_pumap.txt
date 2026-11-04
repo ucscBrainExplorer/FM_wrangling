@@ -1,0 +1,28 @@
+# PUMAP training notebooks (3_trainPUMAPmodel*.ipynb; k8s/jupyter-pumap-job.yaml).
+# Pinned to the AWS GPU instance's notebook environment (Python 3.9.23,
+# /usr/bin/python3 + ~/.local) as of 2026-11-03, so models trained on NRP
+# unpickle the same way. Training does not load ipca_model.pkl; where
+# map_newdata_pumap.ipynb loads it (courtyard), use the scikit-learn that saved
+# it (1.7.2 for combined_subsample_500K_ucebrain768bicanpt_shuffle; needs
+# Python >= 3.10). Install torch first, then this file:
+#   pip install torch==2.8.0 --index-url https://download.pytorch.org/whl/cu126
+#   pip install -r requirements_pumap.txt
+umap_pytorch @ git+https://github.com/ucscBrainExplorer/umap_pytorch.git@bbefedd569e9ce4cb72a47fd8900c5c82877fb2c
+pytorch_lightning==2.5.2
+umap-learn==0.5.9.post2
+pynndescent==0.5.13
+scikit-learn==1.6.1
+numpy==2.0.2
+scipy==1.13.1
+numba==0.60.0
+llvmlite==0.43.0
+pandas==2.3.1
+h5py==3.14.0
+joblib==1.5.1
+dill==0.4.0
+einops==0.8.1
+anndata==0.10.9
+pyarrow==21.0.0
+matplotlib==3.9.4
+jupyterlab==4.4.5
+ipykernel==6.30.1
