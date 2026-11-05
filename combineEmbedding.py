@@ -4,8 +4,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     "--embedding",
     required=True,
-    choices=["uce", "uce_brain_512", "uce_brain_768_bican", "uce_brain_768_bican_pt", "scimilarity"],
-    help="Embedding type to use (uce, uce_brain_512, uce_brain_768_bican, uce_brain_768_bican_pt or scimilarity)"
+    choices=["uce", "uce_brain_512", "uce_brain_768_bican", "uce_brain_768_bican_pt", "uce_brain_768_bican_s2048", "scimilarity"],
+    help="Embedding type to use (uce, uce_brain_512, uce_brain_768_bican, uce_brain_768_bican_pt, uce_brain_768_bican_s2048 or scimilarity)"
 )
 
 parser.add_argument(
@@ -154,6 +154,12 @@ elif embedding == "uce_brain_768_bican_pt":
     embedding_outfile = "uce.h5"
     data_dirs =["UCE_brain_768_bican_pt_npy_obs", "duplicate_UCE_brain_768_bican_pt"]
     dup_dir = "duplicate_UCE_brain_768_bican_pt"
+    n_cols = 768
+    embedding = "uce"  # same as uce_brain_512
+elif embedding == "uce_brain_768_bican_s2048":
+    embedding_outfile = "uce.h5"
+    data_dirs =["UCE_brain_768_bican_s2048_npy_obs", "duplicate_UCE_brain_768_bican_s2048"]
+    dup_dir = "duplicate_UCE_brain_768_bican_s2048"
     n_cols = 768
     embedding = "uce"  # same as uce_brain_512
 elif embedding == "scimilarity":

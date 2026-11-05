@@ -57,6 +57,7 @@ come from and which local folders hold them:
 | `uce_brain_512` | UCE brain 512 | 512 | `s3://latentbrain/UCE_brain_512/` | `UCE_brain_512_npy_obs` | `duplicate_UCE_brain_512` |
 | `uce_brain_768_bican` | UCE brain 768 + BICAN anneal | 768 | `s3://latentbrain/UCE_brain_768_bican/` | `UCE_brain_768_bican_npy_obs` | `duplicate_UCE_brain_768_bican` |
 | `uce_brain_768_bican_pt` | the same + post-training aligning Siletti, BICAN BG, SEA-AD | 768 | `s3://latentbrain/UCE_brain_768_bican_pt/` | `UCE_brain_768_bican_pt_npy_obs` | `duplicate_UCE_brain_768_bican_pt` |
+| `uce_brain_768_bican_s2048` | UCE brain 768 + BICAN anneal on 2,048-gene sentences | 768 | `s3://latentbrain/UCE_brain_768_bican_s2048/` | `UCE_brain_768_bican_s2048_npy_obs` | `duplicate_UCE_brain_768_bican_s2048` |
 
 
 **S3 access.** `s3://latentbrain/<ATLAS_DIR>/` needs no setup: S3 has no real folders, so the first
@@ -355,6 +356,12 @@ Copy the notes the site shows into `wrangling_notes/<reference_uuid>/` in your d
 - Same flow as UCE brain 768 BICAN, for the `ucebrain768bicanpt` model (`ucebrain768bican` + post-training steps; see `submit_jobs.py` in RunFoundationModelNRP).
 - `getEmbeddingfromS3.py --embedding uce_brain_768_bican_pt` reads `s3://latentbrain/UCE_brain_768_bican_pt/*_ucebrain768bicanpt_adata.h5ad` (obsm `X_ucebrain768bicanpt`) into `UCE_brain_768_bican_pt_npy_obs/`.
 - Its embeddings differ from `ucebrain768bican`: do not combine the two or reuse that model's PCA, KNN, species directions or PUMAP.
+
+### UCE brain 768 BICAN s2048 (`--embedding uce_brain_768_bican_s2048`)
+
+- Same flow as UCE brain 768 BICAN, for the `ucebrain768bicans2048` model (Kuan's d768l14v2 BICAN anneal trained on 2,048-gene cell sentences instead of 1,024; see `submit_jobs.py` in RunFoundationModelNRP).
+- `getEmbeddingfromS3.py --embedding uce_brain_768_bican_s2048` reads `s3://latentbrain/UCE_brain_768_bican_s2048/*_ucebrain768bicans2048_adata.h5ad` (obsm `X_ucebrain768bicans2048`) into `UCE_brain_768_bican_s2048_npy_obs/`.
+- A separate model: do not combine its embeddings with any other model's or reuse their PCA, KNN, species directions or PUMAP.
 
 ### Provenance (all embeddings)
 
