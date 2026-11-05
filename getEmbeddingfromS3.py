@@ -8,6 +8,17 @@ parser.add_argument(
     choices=["uce", "uce_brain_512", "uce_brain_768_bican", "uce_brain_768_bican_pt", "uce_brain_768_bican_s2048", "scimilarity"],
     help="Embedding type to use (uce, uce_brain_512, uce_brain_768_bican, uce_brain_768_bican_pt, uce_brain_768_bican_s2048 or scimilarity)"
 )
+parser.add_argument(
+    "--select-datasets-file",
+    help="Download only these dataset IDs (first column, one per line; lines starting with # skipped), e.g. "
+         "<ATLAS_DIR>/dataset_ids.txt. Stops before downloading if any is missing on S3 or has a gap in its chunks. "
+         "Without it, every dataset under the embedding's S3 prefix is downloaded."
+)
+parser.add_argument(
+    "--allow-full-last-chunk", nargs="+", metavar="DATASET_ID",
+    help="Download these datasets even though their last chunk is full size (normally a sign the last chunks are "
+         "still embedding). Use only when the dataset's cell count really is a multiple of the chunk size."
+)
 
 args = parser.parse_args()
 embedding = args.embedding
@@ -429,7 +440,45 @@ def process_files_via_h5 (
 
 
 embedding_files = get_NRP_h5ad_filenames()
+
+selected = None
+if args.select_datasets_file:
+    # filter the listing first, so other datasets under the prefix are not checked or reported
+    with open(args.select_datasets_file) as f:
+        selected = {l.split("\t")[0].strip() for l in f if l.strip() and not l.startswith("#")}
+    chunk_prefix = re.compile(r'^(?P<prefix>.+?)_(?:cell_\d+_\d+|batch\d+)_')
+    def listed_id(f):
+        m = chunk_prefix.match(f)
+        return m.group("prefix") if m else f.replace(file_suffix, "")
+    embedding_files = [f for f in embedding_files if listed_id(f) in selected]
+
 grouped, others = group_files_by_prefix(embedding_files)
+
+# A finished dataset's last chunk holds the remainder, so it is shorter than the others. A last chunk of a full round
+# size (a multiple of 1,000 and the largest chunk) usually means jobs are still running and the last chunks are not
+# on S3 yet: skip it, so a truncated dataset is not saved and then skipped as "already available" on later runs.
+cell_range = re.compile(r'^.+?_cell_(\d+)_(\d+)_')
+maybe_incomplete = []
+for prefix, data in grouped.items():
+    lengths = [int(m.group(2)) - int(m.group(1)) + 1 for m in map(cell_range.match, data["files"]) if m]
+    if lengths and lengths[-1] % 1000 == 0 and lengths[-1] == max(lengths):
+        maybe_incomplete.append(prefix)
+allowed = set(args.allow_full_last_chunk or [])
+for prefix in maybe_incomplete:
+    if prefix in allowed:
+        print(f"{prefix}: last chunk is full size; downloading anyway (--allow-full-last-chunk)")
+        continue
+    print(f"WARNING: {prefix}: last chunk ends at cell {grouped[prefix]['count']:,} and is full size, so the dataset may "
+          f"still be embedding; skipped. If it really has {grouped[prefix]['count'] + 1:,} cells, rerun with "
+          f"--allow-full-last-chunk {prefix}")
+    del grouped[prefix]
+
+if selected is not None:
+    missing = selected - set(grouped) - {f.replace(file_suffix, "") for f in others}
+    if missing:
+        sys.exit(f"ERROR: not on s3://{bucket}/{bucket_prefix}, with a gap in their chunks, or possibly still "
+                 f"embedding (see warnings above): {sorted(missing)}")
+    print(f"Selected {len(selected)} datasets from {args.select_datasets_file}")
 
 # for just one file per dataset
 for file in others:

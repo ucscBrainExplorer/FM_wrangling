@@ -7,12 +7,15 @@ Given a set of wrangled h5ads with UCE embeddings, build a PUMAP reference atlas
 The pipeline has two phases:
 
 **Phase 1 — Build the reference** (this skill)
-1. Combine embeddings with `combineEmbedding.py --shuffle`
+1. Get and combine embeddings: `getEmbeddingfromS3.py`, `combineEmbedding.py --shuffle`
 2. PCA + KNN (run in parallel)
 3. Train PUMAP
 4. Review obs, update `manual_column.json`, annotate with `annotate_obs.py`
 5. Build pyramid
 6. Add the reference to data-explorer
+
+On courtyard, `run_build.sh` runs Step 1 and the PCA of Step 2 in one go
+([below](#steps-12-in-one-go-on-courtyard--run_buildsh)).
 
 **Phase 2 — Map query data onto the reference**
 - Use `map_newdata.py` to project new datasets onto the finished reference → arrow files
@@ -34,15 +37,18 @@ Everything else (Step 1, PCA in Step 2, Steps 4–6) runs on courtyard (see
   `<NPY_DIR>/` and `<DUP_DIR>/` (per-dataset embeddings and obs, filled by `getEmbeddingfromS3.py` in Step 1) and one
   `<ATLAS_DIR>/` per reference atlas (a name you choose).
 
-Run every courtyard command from `<WORK>`, calling the scripts in your own clone. Set this once in `~/.bashrc`:
+Run every courtyard command from `<WORK>`, calling the scripts in your own clone. Set these once in `~/.bashrc`
+(then `source ~/.bashrc`):
 ```bash
 export FMW=/public/groups/hausslerlab/people/$USER/FM_wrangling
+export WORK=/public/groups/hausslerlab/projects/latentbrain
 ```
 then:
 ```bash
-cd /public/groups/hausslerlab/projects/latentbrain
+cd $WORK
 python3 $FMW/combineEmbedding.py ...
 ```
+The scripts do not read `$WORK`: they write relative to the folder you run them from, so `cd $WORK` first.
 Files created in the shared folder are writable by the `hausslerlab` group automatically, with no `umask` change:
 the folder has the setgid bit (new files get group `hausslerlab`) and a default ACL (new files are group-writable).
 
@@ -68,16 +74,42 @@ key from the `latentbrain-aws-creds` secret.
 
 ---
 
-## Step 1 — Combine embeddings (or shuffle a single dataset)
+## Steps 1–2 in one go on courtyard — `run_build.sh`
+
+For several datasets, `run_build.sh` runs Step 1 (get and combine the embeddings) and the courtyard part of Step 2
+(PCA): it downloads, combines, runs IPCA and uploads `uce.h5`, `pca.h5`, `ipca_model.pkl` and `obs.tsv.gz` to
+`s3://latentbrain/<ATLAS_DIR>/`. Then start the KNN on NRP ([Step 2](#knn-nrp-cluster)). Copy it into the atlas
+folder, set `E` (the `<EMBEDDING>`) at its top, and run the copy in `screen`:
+```bash
+cd $WORK && mkdir <ATLAS_DIR>
+cp $FMW/run_build.sh <ATLAS_DIR>/     # list the dataset IDs, one per line, in <ATLAS_DIR>/dataset_ids.txt
+cd <ATLAS_DIR> && bash run_build.sh 2>&1 | tee run_build.log
+```
+The atlas name comes from the folder the copy is in. The copy stays there as the record of how the atlas was built;
+add per-atlas options to it if needed (e.g. `--obs-columns-file`). Steps 1 and 2 below explain each part.
+
+---
+
+## Step 1 — Get and combine embeddings (or shuffle a single dataset)
 
 ### Get the embeddings — `getEmbeddingfromS3.py`
 
+Make `<ATLAS_DIR>/` and list its datasets in `<ATLAS_DIR>/dataset_ids.txt` (one dataset ID per line; lines starting
+with `#` are skipped), then:
 ```bash
-python3 $FMW/getEmbeddingfromS3.py --embedding <EMBEDDING>
+python3 $FMW/getEmbeddingfromS3.py --embedding <EMBEDDING> --select-datasets-file <ATLAS_DIR>/dataset_ids.txt
 ```
 
 Downloads the embedded h5ads from `s3://latentbrain/` into `<NPY_DIR>/` as `<id>_uce.npy`, the obs table
 and `<id>_provenance.json` (see [Provenance](#provenance-all-embeddings)). Datasets already there are skipped.
+
+- Without `--select-datasets-file` it downloads every dataset under the embedding's S3 prefix, including other
+  people's and ones still being embedded (e.g. all of HMBA, over 1 TB).
+- It skips a dataset that looks unfinished, with a warning: a gap in its chunks, or a last chunk of full round size
+  (a finished dataset's last chunk holds the remainder, e.g. `cell_70000_75374`). With `--select-datasets-file` it
+  stops before downloading if any selected dataset is skipped this way or is not on S3.
+- A dataset whose cell count really is a multiple of the chunk size looks unfinished too: check its `total_cells`
+  and rerun with `--allow-full-last-chunk <id>`.
 
 ### Multiple datasets — use `combineEmbedding.py`
 
@@ -85,9 +117,11 @@ and `<id>_provenance.json` (see [Provenance](#provenance-all-embeddings)). Datas
 python3 $FMW/combineEmbedding.py \
     --embedding <EMBEDDING> \
     --results_dir <ATLAS_DIR>/ \
-    --select-datasets-file <ATLAS_DIR>/dataset_ids.tsv \
+    --select-datasets-file <ATLAS_DIR>/dataset_ids.txt \
+    --staging-dir /data/scratch/$USER \
     --shuffle
 ```
+(`--staging-dir` on courtyard; see [Staging](#running-on-courtyard-gi-shared-machine).)
 
 - `--select-datasets-file` — the datasets to combine, one dataset ID per line (matching the npy file names in
   `<NPY_DIR>/`); no header, lines starting with `#` are skipped. A line can add `<TAB>` and the exact source
@@ -95,8 +129,8 @@ python3 $FMW/combineEmbedding.py \
   only needed for datasets embedded before URLs were recorded: `RunFoundationModelNRP/fixed_pipeline.py` stores the
   URL in each output h5ad as `uns["source_url"]`, and `getEmbeddingfromS3.py` copies it into `<id>_provenance.json`.
   The script stops if a dataset has no URL either way, or if the two disagree.
-- It writes `<ATLAS_DIR>/dataset_ids.tsv` with the URLs filled in (dataset ID `<TAB>` URL); when the select file is
-  that same path, as above, it is rewritten in place. `annotate_obs.py` reads the URLs for `metadata_summary.json`
+- It writes `<ATLAS_DIR>/dataset_ids.tsv` with the URLs filled in (dataset ID `<TAB>` URL); if the select file is
+  that same path, it is rewritten in place. `annotate_obs.py` reads the URLs for `metadata_summary.json`
   from it.
 - `--shuffle` writes a new `shuffle_index.npy` and shuffles `uce.h5` and `obs.tsv.gz` in sync
 - Verify output: cell count matches expectation, `obs.tsv.gz` contains expected columns
