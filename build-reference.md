@@ -24,14 +24,15 @@ On courtyard, `run_build.sh` runs Step 1 and the PCA of Step 2 in one go
 
 Two parts run on NRP, exchanging files with `<WORK>/<ATLAS_DIR>/` through `s3://latentbrain/<ATLAS_DIR>/`:
 
-- KNN (Step 2): a large CPU Job (48 cores, 360 GB RAM), launched from a RunKnnNRP clone
+- KNN (Step 2): a large CPU Job (48 cores, 360 GB RAM), launched from a RunKnnNRP clone on a machine with `kubectl`
+  access to NRP (e.g. your laptop; courtyard has no `kubectl`)
 - PUMAP training (Step 3): a GPU pod running JupyterLab
 
 Everything else (Step 1, PCA in Step 2, Steps 4–6) runs on courtyard (see
 [below](#running-on-courtyard-gi-shared-machine)). Code and data live apart there:
 
 - **Code: your own clones**, in your folder `/public/groups/hausslerlab/people/<login>/` (`<login>` = your courtyard
-  user name): `FM_wrangling/`, `RunKnnNRP/`, `data-explorer/`. Each person has their own, so one person's `git pull` or
+  user name): `FM_wrangling/`, `data-explorer/` (`RunKnnNRP/` goes where you run `kubectl`). Each person has their own, so one person's `git pull` or
   edits never change another's runs. `datasetLists/` is inside `FM_wrangling/`; the scripts find it next to themselves.
 - **Data: one shared folder**, `<WORK>` = `/public/groups/hausslerlab/projects/latentbrain/`, holding
   `<NPY_DIR>/` and `<DUP_DIR>/` (per-dataset embeddings and obs, filled by `getEmbeddingfromS3.py` in Step 1) and one
@@ -158,15 +159,20 @@ Use `--chunked` if RAM is constrained: RAM drops to ~32 bytes/row plus one read 
 
 ### KNN (NRP cluster)
 
-Copy `uce.h5` to S3, then launch the job from your clone of [RunKnnNRP](https://github.com/ucscBrainExplorer/RunKnnNRP):
+Copy `uce.h5` to S3 (on courtyard; `run_build.sh` does this):
 ```bash
 aws s3 cp <ATLAS_DIR>/uce.h5 s3://latentbrain/<ATLAS_DIR>/uce.h5
-cd /public/groups/hausslerlab/people/$USER/RunKnnNRP
+```
+then launch the job from your clone of [RunKnnNRP](https://github.com/ucscBrainExplorer/RunKnnNRP) on a machine with
+`kubectl` access to NRP, e.g. your laptop (courtyard has no `kubectl`):
+```bash
+cd RunKnnNRP && git pull
 ./run_pipeline_knn_job.sh <ATLAS_DIR>                    # k=30, ivfflat
 ./run_pipeline_knn_job.sh <ATLAS_DIR> 30 ivfflat ivfpq_128   # or several index types
 ```
 
-Each index type is one Kubernetes Job (`uce-job-knn-<dir>-k<K>-<index>`) that reads `uce.h5` from
+Each index type is one Kubernetes Job (`uce-job-knn-<dir>-k<K>-<index>`; a long `<dir>` is cut and ends with a short
+hash of the full name) that reads `uce.h5` from
 `s3://latentbrain/<ATLAS_DIR>/` and writes back next to it: `index_<INDEX_TYPE>.faiss`, `knn_<K>_<INDEX_TYPE>.npz`.
 PUMAP training reads the KNN file from S3, so it does not need to be copied to `<WORK>`.
 

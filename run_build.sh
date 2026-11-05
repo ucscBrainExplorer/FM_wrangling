@@ -2,7 +2,7 @@
 # Steps 1-2 of build-reference.md on courtyard, for one reference atlas:
 #   download the listed datasets' embeddings, combine (shuffled, obs = union of columns), IPCA, and upload
 #   uce.h5 (for the KNN) and pca.h5, ipca_model.pkl, obs.tsv.gz (for PUMAP) to s3://latentbrain/<ATLAS_DIR>/.
-# The KNN (RunKnnNRP) and PUMAP (NRP GPU pod) run after this, on NRP.
+# The KNN (RunKnnNRP) and PUMAP (NRP GPU pod) run after this, on NRP, launched from a machine with kubectl.
 #
 # Copy this file into the atlas folder, set E below, and run the copy there (in screen):
 #   cd $WORK && mkdir <ATLAS_DIR>
@@ -47,4 +47,5 @@ python3 -u "$FMW/runIPCA.py" --results_dir "$D"
 echo "== upload pca.h5, ipca_model.pkl, obs.tsv.gz $(date)"
 for f in pca.h5 ipca_model.pkl obs.tsv.gz; do aws s3 cp --no-progress "$D/$f" "s3://latentbrain/$D/$f"; done
 
-echo "== done $(date). Next, the KNN from your RunKnnNRP clone: ./run_pipeline_knn_job.sh $D"
+echo "== done $(date). Next, the KNN from your RunKnnNRP clone on a machine with kubectl (e.g. your laptop):"
+echo "   ./run_pipeline_knn_job.sh $D"
