@@ -36,7 +36,9 @@ Everything else (Step 1, PCA in Step 2, Steps 4–6) runs on courtyard (see
   edits never change another's runs. `datasetLists/` is inside `FM_wrangling/`; the scripts find it next to themselves.
 - **Data: one shared folder**, `<WORK>` = `/public/groups/hausslerlab/projects/latentbrain/`, holding
   `<NPY_DIR>/` and `<DUP_DIR>/` (per-dataset embeddings and obs, filled by `getEmbeddingfromS3.py` in Step 1) and one
-  `<ATLAS_DIR>/` per reference atlas (a name you choose).
+  `<ATLAS_DIR>/` per reference atlas (a name you choose). The atlas has a folder of the same name on S3,
+  `s3://latentbrain/<ATLAS_DIR>/`: `run_build.sh`, the KNN Job and the PUMAP notebook all find their files by that
+  name, so keep the two the same and do not rename either one.
 
 Run every courtyard command from `<WORK>`, calling the scripts in your own clone. Set these once in `~/.bashrc`
 (then `source ~/.bashrc`):
