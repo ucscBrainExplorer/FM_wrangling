@@ -328,7 +328,23 @@ Options:
 - `--skip_top_levels N` — don't write tiles for the N highest-resolution levels (`metadata.json` still lists all levels)
 - `--metadata_only` — write `metadata.json` without building tiles
 
-Output: ~60 PNG tiles per feature + `metadata.json` in `target_dir`
+Output: PNG tiles for each feature + `metadata.json` in `target_dir`. The tile count grows with the number of levels
+(e.g. 525 per feature at 7 levels).
+
+### Upload and view
+
+Upload `target_dir` to a new folder in the pyramid bucket, named `<ATLAS_DIR>_<reference_uuid>`. The top level of the
+bucket is for production atlases (the ones data-explorer shows); put experimental ones under `experimental/`, and copy
+one to the top level only when it becomes production. `<PREFIX>` below is `experimental/` or empty:
+```bash
+aws s3 ls s3://latentbrainpyramid/<PREFIX><ATLAS_DIR>_<reference_uuid>/        # must be empty: a new folder
+aws s3 sync --no-progress <target_dir> s3://latentbrainpyramid/<PREFIX><ATLAS_DIR>_<reference_uuid>/
+```
+Its URL is `https://latentbrainpyramid.s3.amazonaws.com/<PREFIX><ATLAS_DIR>_<reference_uuid>` (a plain `curl` of it
+gets 403; that is normal). View it in the browser, before or without adding it to data-explorer:
+```
+https://brainexplorer.ucsc.edu/pyramid/?image=https://latentbrainpyramid.s3.amazonaws.com/<PREFIX><ATLAS_DIR>_<reference_uuid>
+```
 
 ## Step 6 — Add the reference to data-explorer — `merge_metadata_summary.py`
 
