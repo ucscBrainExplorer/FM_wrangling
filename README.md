@@ -1,92 +1,28 @@
-## UCSC Brain Exploer visualization of mapping new data to existing reference
+# FM_wrangling
 
-{browser_url}/pyramid/?image={ref}&overlay={arrowfile_url}
+Builds browsable reference atlases for [UCSC Brain Explorer](https://brainexplorer.ucsc.edu) from
+foundation-model embeddings of single-cell data, and maps new datasets onto them.
 
-browser_url = "https://brainexplorer.ucsc.edu"  or "https://dev.brainexplorer.ucsc.edu"
+The embeddings come from [RunFoundationModelNRP](https://github.com/ucscBrainExplorer/RunFoundationModelNRP)
+(UCE and the UCE-brain models, run on NRP). From those, this repo combines datasets, runs PCA, trains a
+parametric UMAP (PUMAP), annotates cell metadata, and builds the image pyramid the browser shows.
+`map_newdata.py` then projects a new dataset onto a finished atlas as an overlay.
 
-this is an example internet-accessible pyramid tile directory
+## Docs
 
-ref ="https://tmpsinglecell.xenahubs.net/download/UCE/Wang2025Nature"  
-
-this is an example internet-accessible arrow_file
-
-arrowfile_url= "https://latentbrain.s3.us-east-1.amazonaws.com/Wang2025Nature/{arrow_file}"   
-
-## Train PUMAP on an NRP GPU pod
-
-`3_trainPUMAPmodel.ipynb` and `3_trainPUMAPmodel_supervised.ipynb` run in JupyterLab on an
-NRP GPU, reading their inputs from S3 and writing results back to S3. Edit notebooks on
-your laptop and `git push`; the pod runs whatever is on `main`. See
-[build-reference.md](build-reference.md) Step 3 for what the notebook does.
-
-You need `kubectl` access to the NRP namespace `braingeneers`.
-
-### 1. Put the inputs in S3
-
-One folder per run, e.g. `s3://latentbrain/combined_subsample_500K_ucebrain768bicanpt_shuffle/`:
-
-| File | Used by |
+| Doc | What it covers |
 |---|---|
-| `pca.h5` (or `pca_corrected*.h5`) | training (`embedding_h5_file`) |
-| `knn_30_ivfflat.npz` | training (`knn_outfile`) |
-| `obs.tsv.gz` | plot cells (supervised: `metadata_file`, the labels) |
-| `ipca_model.pkl` | not training; `map_newdata` needs it next to the transform JSON |
+| [build-reference.md](build-reference.md) | The whole pipeline, step by step: combine embeddings, PCA and KNN, PUMAP, annotate, pyramid, data-explorer, and mapping new data |
+| [train-pumap-nrp.md](train-pumap-nrp.md) | Step 3 in detail: training PUMAP in JupyterLab on an NRP GPU pod |
 
-### 2. Point the notebook at the folder
+## Where things run
 
-In cell 2, set `results_dir` to the S3 folder and adjust the settings, then commit and push:
+| Part | Where |
+|---|---|
+| Combine embeddings, PCA, annotate, pyramid (Steps 1, 2, 4–6) | courtyard, from the shared folder `/public/groups/hausslerlab/projects/latentbrain/` |
+| KNN (Step 2) | an NRP CPU Job, launched with [RunKnnNRP](https://github.com/ucscBrainExplorer/RunKnnNRP) |
+| PUMAP training (Step 3) | an NRP GPU pod ([train-pumap-nrp.md](train-pumap-nrp.md)) |
+| Launching NRP Jobs and pods | any machine with `kubectl` access to the `braingeneers` namespace, e.g. your laptop (courtyard has no `kubectl`) |
 
-```python
-results_dir = "s3://latentbrain/combined_subsample_500K_ucebrain768bicanpt_shuffle/"
-embedding_h5_file = "pca.h5"
-existing_model_iteration = 0   # 0 = new model; N = continue from pytorch{tag}_eN.pkl
-epochs = 10
-run_tag = "try1"               # new tag for each try; goes into every output name
-```
-
-At the end of cell 2, `workdir()` ([s3dir.py](s3dir.py)) copies just the files training
-reads into the pod; the last cell, `push(results_dir)`, uploads the new outputs. Neither
-ever overwrites a file: if an output with the same name is already in S3, `push` warns and
-skips it, so use a new `run_tag` (or more epochs) for each try. `push` uploads only files
-made since the kernel started, so a file you delete from S3 is not re-uploaded from the
-pod's cache on `/mnt/pvc` (restarting the kernel mid-run makes earlier outputs count as
-old). A local path such as
-`/mnt/efsUCE/...` still works on the AWS GPU instance as before.
-
-### 3. Start the pod
-
-Use your own name, so two people can each have a pod:
-
-```bash
-sed s/USERNAME/chris/g k8s/jupyter-pumap-job.yaml | kubectl apply -f -
-
-kubectl get pods -n braingeneers -l job-name=jupyter-pumap-chris    # Pending until a GPU frees up
-```
-
-The pod clones a fresh copy of `main`, installs the pinned packages
-([requirements_pumap.txt](requirements_pumap.txt), the AWS GPU instance's versions) and starts
-JupyterLab. The first start takes several minutes; later ones reuse a pip cache.
-
-### 4. Connect
-
-```bash
-kubectl logs -n braingeneers job/jupyter-pumap-chris | grep "Jupyter token" # you need to wait for installation finish, about 5-6min
-
-kubectl port-forward -n braingeneers job/jupyter-pumap-chris 8888:8888    # keep open
-```
-
-Open http://localhost:8888, paste the token, open the notebook, and Run All. Look at the
-maps; changes made in the pod are scratch (they vanish with it), so make lasting ones on your
-laptop. If the laptop sleeps, rerun `port-forward`; if the pod restarted, get the new token.
-
-### 5. Delete the pod when done
-
-NRP flags GPUs that sit idle:
-
-```bash
-kubectl delete job -n braingeneers jupyter-pumap-chris
-```
-
-Results are in the S3 folder (`pytorch{tag}_e{N}.pkl`, `transform{tag}_e{N}.json`,
-`umap{tag}_e{N}.npy`). Downloaded inputs stay cached on the shared PVC (`uce-pvc`, folder
-`pumap/<prefix>/`), so the next pod skips the download.
+Files move between courtyard and NRP through `s3://latentbrain/<ATLAS_DIR>/`. See
+[build-reference.md](build-reference.md#where-to-run) for the folder layout and setup.

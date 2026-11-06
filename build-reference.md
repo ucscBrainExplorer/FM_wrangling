@@ -18,14 +18,15 @@ On courtyard, `run_build.sh` runs Step 1 and the PCA of Step 2 in one go
 ([below](#steps-12-in-one-go-on-courtyard--run_buildsh)).
 
 **Phase 2 — Map query data onto the reference**
-- Use `map_newdata.py` to project new datasets onto the finished reference → arrow files
+- Use `map_newdata.py` to project new datasets onto the finished reference → arrow files, viewed as an overlay
+  on the reference pyramid ([below](#view-mapped-query-data--map_newdatapy))
 
 ## Where to run
 
 Two parts run on NRP, exchanging files with `<WORK>/<ATLAS_DIR>/` through `s3://latentbrain/<ATLAS_DIR>/`:
 
-- KNN (Step 2): a large CPU Job (48 cores, 360 GB RAM), launched from a RunKnnNRP clone on a machine with `kubectl`
-  access to NRP (e.g. your laptop; courtyard has no `kubectl`)
+- KNN (Step 2): a CPU Job sized from the embedding file (500K cells: 16 cores, 32 GB RAM), launched from a RunKnnNRP
+  clone on a machine with `kubectl` access to NRP (e.g. your laptop; courtyard has no `kubectl`)
 - PUMAP training (Step 3): a GPU pod running JupyterLab
 
 Everything else (Step 1, PCA in Step 2, Steps 4–6) runs on courtyard (see
@@ -203,7 +204,7 @@ OMP_NUM_THREADS=16 OPENBLAS_NUM_THREADS=16 MKL_NUM_THREADS=16 \
 ## Step 3 — Train PUMAP
 
 Runs on an NRP GPU pod in JupyterLab, with inputs and outputs in `s3://latentbrain/<ATLAS_DIR>/`: see
-[README.md](README.md#train-pumap-on-an-nrp-gpu-pod) for starting the pod. Open `3_trainPUMAPmodel.ipynb` and set
+[train-pumap-nrp.md](train-pumap-nrp.md) for starting the pod. Open `3_trainPUMAPmodel.ipynb` and set
 cell 2:
 ```python
 results_dir = "s3://latentbrain/<ATLAS_DIR>/"
@@ -360,6 +361,20 @@ python3 $FMW/merge_metadata_summary.py /public/groups/hausslerlab/people/$USER/d
 Copy the notes the site shows into `wrangling_notes/<reference_uuid>/` in your data-explorer clone:
 - `<ATLAS_DIR>/wrangling_notes_annotation.txt` → `wrangling_notes.txt`
 - `system_prompt_normalized_age_bucket.txt` and `system_prompt_normalized_organism.txt`
+
+## View mapped query data — `map_newdata.py`
+
+The Arrow file from `map_newdata.py --out <name>.arrow` shows as an overlay on the reference: upload it anywhere
+public (e.g. `s3://latentbrain/<ATLAS_DIR>/`) and add `&overlay=` to the viewer URL:
+```
+{browser}/pyramid/?image={pyramid_url}&overlay={arrow_url}
+```
+- `{browser}`: `https://brainexplorer.ucsc.edu`, or `https://dev.brainexplorer.ucsc.edu` for the dev site
+- `{pyramid_url}`: the reference pyramid's public URL (Step 5, Upload and view)
+- `{arrow_url}`: the Arrow file's public URL, e.g. `https://latentbrain.s3.us-east-1.amazonaws.com/<ATLAS_DIR>/<name>.arrow`
+
+For example, `image=https://tmpsinglecell.xenahubs.net/download/UCE/Wang2025Nature` with
+`overlay=https://latentbrain.s3.us-east-1.amazonaws.com/Wang2025Nature/<arrow_file>`.
 
 ---
 
