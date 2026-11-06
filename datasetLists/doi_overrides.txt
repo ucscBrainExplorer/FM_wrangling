@@ -1,0 +1,7 @@
+# Citations that replace the CELLxGENE table's, for datasets whose preprint is published
+# but whose CELLxGENE collection still points at the preprint. Applied by cxg_info.py on
+# top of the newest datasets.info.cxg.<date>.txt; drop a row once CELLxGENE catches up.
+dataset_id	collection_doi	collection_doi_label	note
+37a17b78-4864-4a42-b67b-31c00962795a	10.1038/s41586-025-09573-z	Lee et al. (2026) Nature	PsychAD MSSM_Cohort; CELLxGENE: medRxiv 10.1101/2024.10.31.24316513
+5c97eeeb-7e52-44b3-b010-b832b1f5424c	10.1038/s41586-025-09573-z	Lee et al. (2026) Nature	PsychAD HBCC_Cohort; CELLxGENE: medRxiv 10.1101/2024.10.31.24316513
+5e57cd50-8e42-42d6-940d-5c1660d06864	10.1038/s41586-025-09573-z	Lee et al. (2026) Nature	PsychAD RADC_Cohort; CELLxGENE: medRxiv 10.1101/2024.10.31.24316513

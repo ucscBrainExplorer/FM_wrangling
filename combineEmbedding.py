@@ -72,6 +72,7 @@ import numpy as np
 import pandas as pd
 import h5py
 from obs_shuffle import write_shuffled_obs   # FM_wrangling/obs_shuffle.py (script dir is on sys.path)
+from cxg_info import load_cxg_info            # FM_wrangling/cxg_info.py
 
 # After reading a mmap chunk, tell the kernel it can reclaim those pages, keeping
 # RSS flat while sequentially scanning a large read-only mmap. Uses mmap.mmap's
@@ -414,15 +415,11 @@ def get_ucsc_collection():
     )
     return df
 
-#cellxgene info: newest datasetLists/datasets.info.cxg.YYYY-MM-DD.txt (from fetch_cxg_datasets.py);
-# replaces cellxgene_census.open_soma(), whose tiledbsoma needs AVX (courtyard has none)
-_cxg_info_files = sorted(glob.glob(os.path.join(lists_dir, "datasets.info.cxg.*.txt")))
-if not _cxg_info_files:
-    print(f"ERROR: no datasets.info.cxg.*.txt in {lists_dir}; run {lists_dir}/fetch_cxg_datasets.py")
-    sys.exit(1)
-cxg_info_file = _cxg_info_files[-1]
+#cellxgene info: newest datasetLists/datasets.info.cxg.YYYY-MM-DD.txt (from fetch_cxg_datasets.py),
+# with datasetLists/doi_overrides.txt applied; replaces cellxgene_census.open_soma(), whose
+# tiledbsoma needs AVX (courtyard has none)
+cxg_info_file, cxgInfo = load_cxg_info(lists_dir)
 print(f"  CELLxGENE dataset info: {cxg_info_file}")
-cxgInfo = pd.read_csv(cxg_info_file, sep="\t", dtype=str).rename(columns={"#dataset_id": "dataset_id"})
 
 # fallback: Discovery API for datasets not in the datasets.info table (e.g. MERFISH/spatial)
 # keyed by CXG explorer URL ID (the UUID in explorer_url, which is used as the .npy filename)

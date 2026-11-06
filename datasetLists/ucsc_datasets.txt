@@ -30,3 +30,4 @@ Allen-MERFISH-C57BL6J-638850	3938808	10.1038/s41586-023-06812-z	Yao et al. (2023
 subsample_500K_BICAN	75375		BICAN Basal Ganglia	500K subsample: BICAN basal ganglia	s3://ucsc-h5ad/subsample_500K_BICAN.h5ad
 subsample_500K_SEA-AD	179167	10.1038/s41593-024-01774-5	Gabitto et al. (2024) Nat Neurosci	500K subsample: SEA-AD MTG and DLPFC	s3://ucsc-h5ad/subsample_500K_SEA-AD.h5ad
 subsample_500K_Siletti	245458	10.1126/science.add7046	Siletti et al. (2023) Science	500K subsample: Siletti human brain	s3://ucsc-h5ad/subsample_500K_Siletti.h5ad
+subsample_100K_PsychAD_MSSM	100000	10.1038/s41586-025-09573-z	Lee et al. (2026) Nature	100K subsample: PsychAD MSSM cohort, dorsolateral prefrontal cortex	s3://ucsc-h5ad/subsample_100K_PsychAD_MSSM.h5ad

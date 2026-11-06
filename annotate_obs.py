@@ -28,6 +28,7 @@ import math
 from dotenv import load_dotenv
 from openai import OpenAI
 from cell_label import pick_cell_label
+from cxg_info import load_cxg_info
 load_dotenv(override=True)
 
 # ---------- set up ----------
@@ -50,9 +51,6 @@ dataset_uri_file = os.path.join(data_dir, "dataset_ids.tsv")  # dataset_id <tab>
 lists_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "datasetLists")  # versioned with the scripts
 ucsc_file = os.path.join(lists_dir, "ucsc_datasets.txt")
 manual_column_config_file = os.path.join(lists_dir, "manual_column.json")
-# CELLxGENE dataset table: newest datasetLists/datasets.info.cxg.<date>.txt (refresh with
-# datasetLists/fetch_cxg_datasets.py); replaces the live census query, which needs AVX
-cxg_info_file = sorted(glob.glob(os.path.join(lists_dir, "datasets.info.cxg.*.txt")))[-1]
 
 if not os.path.exists(metadata_file):
     sys.exit(f"ERROR: {metadata_file} not found")
@@ -91,8 +89,11 @@ print(f"{metadata_file}: {meta_data.shape[0]:,} cells, {meta_data.shape[1]} colu
 # dataset_info: key is "dataset_id"; values are dicts with "collection_doi_label", "collection_doi", "dataset_title"
 
 # dataset info from the cellxgene dataset table (same source as combineEmbedding.py)
+# CELLxGENE dataset table: newest datasetLists/datasets.info.cxg.<date>.txt (refresh with
+# datasetLists/fetch_cxg_datasets.py) with datasetLists/doi_overrides.txt applied; replaces
+# the live census query, which needs AVX
+cxg_info_file, cxg_df = load_cxg_info(lists_dir)
 print("cellxgene dataset table:", cxg_info_file)
-cxg_df = pd.read_csv(cxg_info_file, sep="\t", dtype=str).rename(columns={"#dataset_id": "dataset_id"})
 dataset_info_df = cxg_df[["dataset_id", "collection_doi_label", "collection_doi", "dataset_title"]]
 dataset_info_df = dataset_info_df.set_index("dataset_id")
 dataset_info = dataset_info_df.to_dict(orient="index")

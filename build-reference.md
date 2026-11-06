@@ -266,7 +266,7 @@ The file is in the repo, so commit and push the change (the next atlas build use
 python3 $FMW/annotate_obs.py --data_dir <ATLAS_DIR>
 ```
 
-- Reads `<ATLAS_DIR>/obs.tsv.gz` and `dataset_ids.tsv`, plus `datasetLists/` (`ucsc_datasets.txt`, `manual_column.json`, newest `datasets.info.cxg.*.txt`).
+- Reads `<ATLAS_DIR>/obs.tsv.gz` and `dataset_ids.tsv`, plus `datasetLists/` (`ucsc_datasets.txt`, `manual_column.json`, newest `datasets.info.cxg.*.txt` with `doi_overrides.txt` applied).
 - Writes `obs_annotated.tsv.gz`, `metadata_summary.json`, `wrangling_notes_annotation.txt` and the two `system_prompt_*.txt` files.
 - Normalizes organism and development stage (age bucket) with OpenAI gpt-4.1; needs `OPENAI_API_KEY` in a `.env` file, found by searching up from the script's folder: put it in
   `/public/groups/hausslerlab/people/<login>/.env`, readable only by you (`chmod 600`), never in the shared folder or
@@ -399,7 +399,7 @@ For example, `image=https://tmpsinglecell.xenahubs.net/download/UCE/Wang2025Natu
   `utils/shuffle.py`). It needs free space about the size of the output `uce.h5`. Files there not accessed for 14 days
   are deleted automatically, which is fine: they are only temporary.
 - **Threads:** cap NumPy/sklearn jobs with `OMP_NUM_THREADS=16 OPENBLAS_NUM_THREADS=16 MKL_NUM_THREADS=16` (see PCA above).
-- **No AVX:** the CPU (Xeon E7-4830) cannot run `tiledbsoma` / `cellxgene_census` ("Illegal instruction"). `combineEmbedding.py` reads CELLxGENE metadata from the newest `datasetLists/datasets.info.cxg.*.txt` instead; refresh it with `$FMW/datasetLists/fetch_cxg_datasets.py` (writes into that folder by default).
+- **No AVX:** the CPU (Xeon E7-4830) cannot run `tiledbsoma` / `cellxgene_census` ("Illegal instruction"). `combineEmbedding.py` reads CELLxGENE metadata from the newest `datasetLists/datasets.info.cxg.*.txt` instead; refresh it with `$FMW/datasetLists/fetch_cxg_datasets.py` (writes into that folder by default). Where CELLxGENE still cites a preprint that has since been published, add a row to `datasetLists/doi_overrides.txt` (dataset_id, collection_doi, collection_doi_label, note); both `combineEmbedding.py` and `annotate_obs.py` apply it on top of the table, and print how many overrides they used.
 - **Long jobs:** start them in `screen` so they survive the terminal closing.
 
 ### UCE brain 512 (`--embedding uce_brain_512`)
