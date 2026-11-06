@@ -22,7 +22,7 @@ parametric UMAP (PUMAP), annotates cell metadata, and builds the image pyramid t
 | Combine embeddings, PCA, annotate, pyramid (Steps 1, 2, 4–6) | courtyard, from the shared folder `/public/groups/hausslerlab/projects/latentbrain/` |
 | KNN (Step 2) | an NRP CPU Job, launched with [RunKnnNRP](https://github.com/ucscBrainExplorer/RunKnnNRP) |
 | PUMAP training (Step 3) | an NRP GPU pod ([train-pumap-nrp.md](train-pumap-nrp.md)) |
-| Launching NRP Jobs and pods | any machine with `kubectl` access to the `braingeneers` namespace, e.g. your laptop (courtyard has no `kubectl`) |
+| Launching NRP Jobs and pods | any machine with `kubectl` access to the `braingeneers` namespace: courtyard (shared service account, see [build-reference.md](build-reference.md#kubectl-on-courtyard)) or your laptop |
 
 Files move between courtyard and NRP through `s3://latentbrain/<ATLAS_DIR>/`. See
 [build-reference.md](build-reference.md#where-to-run) for the folder layout and setup.

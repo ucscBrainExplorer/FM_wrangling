@@ -26,14 +26,15 @@ On courtyard, `run_build.sh` runs Step 1 and the PCA of Step 2 in one go
 Two parts run on NRP, exchanging files with `<WORK>/<ATLAS_DIR>/` through `s3://latentbrain/<ATLAS_DIR>/`:
 
 - KNN (Step 2): a CPU Job sized from the embedding file (500K cells: 16 cores, 32 GB RAM), launched from a RunKnnNRP
-  clone on a machine with `kubectl` access to NRP (e.g. your laptop; courtyard has no `kubectl`)
+  clone on a machine with `kubectl` access to NRP: courtyard ([kubectl on courtyard](#kubectl-on-courtyard)) or
+  your laptop. `run_build.sh` launches it by itself.
 - PUMAP training (Step 3): a GPU pod running JupyterLab
 
 Everything else (Step 1, PCA in Step 2, Steps 4–6) runs on courtyard (see
 [below](#running-on-courtyard-gi-shared-machine)). Code and data live apart there:
 
 - **Code: your own clones**, in your folder `/public/groups/hausslerlab/people/<login>/` (`<login>` = your courtyard
-  user name): `FM_wrangling/`, `data-explorer/` (`RunKnnNRP/` goes where you run `kubectl`). Each person has their own, so one person's `git pull` or
+  user name): `FM_wrangling/`, `RunKnnNRP/`, `data-explorer/`. Each person has their own, so one person's `git pull` or
   edits never change another's runs. `datasetLists/` is inside `FM_wrangling/`; the scripts find it next to themselves.
 - **Data: one shared folder**, `<WORK>` = `/public/groups/hausslerlab/projects/latentbrain/`, holding
   `<NPY_DIR>/` and `<DUP_DIR>/` (per-dataset embeddings and obs, filled by `getEmbeddingfromS3.py` in Step 1) and one
@@ -80,10 +81,20 @@ key from the `latentbrain-aws-creds` secret.
 
 ## Steps 1–2 in one go on courtyard — `run_build.sh`
 
-For several datasets, `run_build.sh` runs Step 1 (get and combine the embeddings) and the courtyard part of Step 2
-(PCA): it downloads, combines, runs IPCA and uploads `uce.h5`, `pca.h5`, `ipca_model.pkl` and `obs.tsv.gz` to
-`s3://latentbrain/<ATLAS_DIR>/`. Then start the KNN on NRP ([Step 2](#knn-nrp-cluster)). Copy it into the atlas
-folder, set `E` (the `<EMBEDDING>`) at its top, and run the copy in `screen`:
+For several datasets, `run_build.sh` runs Step 1 (get and combine the embeddings) and Step 2: it downloads,
+combines, uploads `uce.h5` to `s3://latentbrain/<ATLAS_DIR>/`, starts the KNN Job on NRP ([Step 2](#knn-nrp-cluster)),
+runs IPCA while the KNN runs, and uploads `pca.h5`, `ipca_model.pkl` and `obs.tsv.gz`. A file already on S3 with the
+same size is not uploaded again (e.g. a `uce.h5` uploaded by hand to start the KNN early). Copy it into the atlas
+folder, set two things at its top, and run the copy in `screen`:
+- `E`: the `<EMBEDDING>`
+- `KNN_INDEX`: decide before starting, since the KNN Job starts by itself. `ivfflat` gives exact distances, but its
+  index file is about the size of `uce.h5` (41 GB for 13.5M cells x 768). A PQ index (`ivfpq_<M>`) is compressed,
+  with approximate distances, so fewer of the true nearest neighbours. `M` must divide the embedding size:
+  768-d (UCE brain models): `ivfpq_256` (3 dims per code, about 12x smaller) or `ivfpq_128`;
+  1280-d (UCE): `ivfpq_320` (4 dims per code, about 16x smaller). `none` skips the KNN.
+
+It checks at the start that `kubectl` can create Jobs (see [kubectl on courtyard](#kubectl-on-courtyard)), so a
+missing login fails at once rather than hours later.
 ```bash
 cd $WORK && mkdir <ATLAS_DIR>
 cp $FMW/run_build.sh <ATLAS_DIR>/     # list the dataset IDs, one per line, in <ATLAS_DIR>/dataset_ids.txt
@@ -166,12 +177,15 @@ Copy `uce.h5` to S3 (on courtyard; `run_build.sh` does this):
 ```bash
 aws s3 cp <ATLAS_DIR>/uce.h5 s3://latentbrain/<ATLAS_DIR>/uce.h5
 ```
-then launch the job from your clone of [RunKnnNRP](https://github.com/ucscBrainExplorer/RunKnnNRP) on a machine with
-`kubectl` access to NRP, e.g. your laptop (courtyard has no `kubectl`):
+then launch the job (`run_build.sh` does this too, with its `KNN_INDEX`) from your clone of
+[RunKnnNRP](https://github.com/ucscBrainExplorer/RunKnnNRP) on a machine with `kubectl` access to NRP: courtyard
+([kubectl on courtyard](#kubectl-on-courtyard)) or your laptop:
 ```bash
 cd RunKnnNRP && git pull
 ./run_pipeline_knn_job.sh <ATLAS_DIR>                    # k=30, ivfflat
+./run_pipeline_knn_job.sh <ATLAS_DIR> 30 ivfpq_256       # compressed index, for large atlases
 ./run_pipeline_knn_job.sh <ATLAS_DIR> 30 ivfflat ivfpq_128   # or several index types
+kubectl get jobs -n braingeneers | grep knn              # progress
 ```
 
 Each index type is one Kubernetes Job (`uce-job-knn-<dir>-k<K>-<index>`; a long `<dir>` is cut and ends with a short
@@ -401,6 +415,35 @@ For example, `image=https://tmpsinglecell.xenahubs.net/download/UCE/Wang2025Natu
 - **Threads:** cap NumPy/sklearn jobs with `OMP_NUM_THREADS=16 OPENBLAS_NUM_THREADS=16 MKL_NUM_THREADS=16` (see PCA above).
 - **No AVX:** the CPU (Xeon E7-4830) cannot run `tiledbsoma` / `cellxgene_census` ("Illegal instruction"). `combineEmbedding.py` reads CELLxGENE metadata from the newest `datasetLists/datasets.info.cxg.*.txt` instead; refresh it with `$FMW/datasetLists/fetch_cxg_datasets.py` (writes into that folder by default). Where CELLxGENE still cites a preprint that has since been published, add a row to `datasetLists/doi_overrides.txt` (dataset_id, collection_doi, collection_doi_label, note); both `combineEmbedding.py` and `annotate_obs.py` apply it on top of the table, and print how many overrides they used.
 - **Long jobs:** start them in `screen` so they survive the terminal closing.
+
+### kubectl on courtyard
+
+NRP Jobs (the KNN) can be launched from courtyard with the lab's shared NRP service account (`braingeneers-ingest`,
+namespace `braingeneers`), which needs no browser login. Once per person:
+1. Get the kubeconfig file `config.service_account` from the lab (Slack) and copy it to courtyard, readable only by you
+   (it holds a token, like a password; keep it out of `<WORK>`, repos and chat):
+   ```bash
+   scp config.service_account courtyard:~/.kube/        # from your laptop; mkdir -p ~/.kube first
+   chmod 700 ~/.kube && chmod 600 ~/.kube/config.service_account
+   ```
+2. Install `kubectl` in `~/bin`, matching the cluster's minor version (v1.34 in 2026-11; `kubectl version` shows
+   both, and warns if they are more than one apart):
+   ```bash
+   V=$(curl -fsSL https://dl.k8s.io/release/stable-1.34.txt)
+   curl -fsSLO https://dl.k8s.io/release/$V/bin/linux/amd64/kubectl
+   echo "$(curl -fsSL https://dl.k8s.io/release/$V/bin/linux/amd64/kubectl.sha256)  kubectl" | sha256sum --check
+   install -m 755 kubectl ~/bin/kubectl && rm kubectl
+   ```
+3. Add to `~/.bashrc`, then `source ~/.bashrc`:
+   ```bash
+   export KUBECONFIG=$HOME/.kube/config.service_account
+   ```
+4. Check: `kubectl auth can-i create jobs -n braingeneers` prints `yes`.
+
+Every command also prints a warning about "auto-generated secret-based tokens": harmless, it is about how the
+service account was set up. No `kubectl oidc-login` plugin is needed (that is for personal browser logins). The
+service account can also read the namespace's secrets, including `latentbrain-aws-creds`, so treat the file as a
+credential.
 
 ### UCE brain 512 (`--embedding uce_brain_512`)
 
