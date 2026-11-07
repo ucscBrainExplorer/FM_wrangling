@@ -5,16 +5,73 @@ regenerated, unshuffled obs).
 Memory stays bounded for ~100M-row obs tables: columns are held in Arrow
 (dictionary-encoded where low-cardinality) instead of pandas object strings.
 """
+import contextlib
 import gzip
+import io
 import itertools
+import os
+import shutil
+import subprocess
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+import pyarrow.compute as pc
+import pyarrow.csv as pacsv
 import pyarrow.parquet as pq
 
 # Columns that are (near-)unique per cell; everything else is dictionary-encoded.
 HIGH_CARDINALITY_OBS_COLS = {"new_index", "old_index"}
+
+# Threads for pigz (parallel gzip) when writing the obs TSV; plain gzip if pigz is missing.
+PIGZ_THREADS = int(os.environ.get("PIGZ_THREADS", 8))
+
+
+@contextlib.contextmanager
+def _gzip_writer(out_path):
+    """Binary file object whose bytes end up gzip-compressed in out_path.
+
+    Uses pigz (a standard single-stream .gz, readable by gzip/zcat/pandas) on
+    PIGZ_THREADS threads when it is installed, else Python's gzip (one thread).
+    """
+    pigz = shutil.which("pigz")
+    if not pigz:
+        with gzip.open(out_path, "wb") as f:
+            yield f
+        return
+    with open(out_path, "wb") as fout:
+        proc = subprocess.Popen([pigz, "-p", str(PIGZ_THREADS), "-6", "-c"], stdin=subprocess.PIPE, stdout=fout)
+        try:
+            yield proc.stdin
+        finally:
+            proc.stdin.close()
+            if proc.wait() != 0:
+                raise RuntimeError(f"pigz failed (exit {proc.returncode}) writing {out_path}")
+
+
+def _is_string_type(t):
+    return (pa.types.is_string(t) or pa.types.is_large_string(t)
+            or (pa.types.is_dictionary(t) and (pa.types.is_string(t.value_type) or pa.types.is_large_string(t.value_type))))
+
+
+def _block_tsv_pandas(block, header):
+    """The reference format: pandas to_csv, new_index (if present) as the index column."""
+    df = block.to_pandas()
+    if 'new_index' in df.columns:
+        df = df.set_index('new_index')
+    return df.to_csv(sep='\t', header=header).encode()
+
+
+def _block_tsv_arrow(block, cols, header):
+    """Same bytes as _block_tsv_pandas for an all-string block with new_index first in cols,
+    ~70x faster (Arrow's C++ CSV writer). Missing values are written as empty fields, as pandas does.
+    quoting_style='none' raises ArrowInvalid if a value contains a tab, quote or newline (pandas would
+    quote it), so the caller falls back to pandas for that block."""
+    t = pa.table({c: pc.cast(block[c], pa.large_string()) if pa.types.is_dictionary(block[c].type) else block[c]
+                  for c in cols})
+    buf = io.BytesIO()
+    pacsv.write_csv(t, buf, pacsv.WriteOptions(delimiter='\t', quoting_style='none', include_header=False))
+    return (('\t'.join(cols) + '\n').encode() if header else b'') + buf.getvalue()
 
 
 def write_shuffled_obs(parquet_path, shuffle_idx, out_path, block_rows=1_000_000):
@@ -45,16 +102,28 @@ def write_shuffled_obs(parquet_path, shuffle_idx, out_path, block_rows=1_000_000
             t = pq.read_table(parquet_path, columns=[name], read_dictionary=[name])
             arrays[name] = t.unify_dictionaries().column(0).combine_chunks()
 
+    # Fast path: Arrow formats the text when every column is a string and new_index exists (it becomes the
+    # first column, as pandas' index). Otherwise, and for any block Arrow refuses, pandas writes it.
+    use_arrow = 'new_index' in col_names and all(_is_string_type(arrays[c].type) for c in col_names)
+    cols = ['new_index'] + [c for c in col_names if c != 'new_index']
     n = len(shuffle_idx)
-    with gzip.open(out_path, 'wt') as fout:
+    with _gzip_writer(out_path) as fout:
         for out_start in range(0, n, block_rows):
             idx = pa.array(shuffle_idx[out_start:out_start + block_rows])
             block = pa.table({name: arrays[name].take(idx) for name in col_names})
-            df = block.to_pandas()
-            if 'new_index' in df.columns:
-                df = df.set_index('new_index')
-            df.to_csv(fout, sep='\t', header=(out_start == 0))
-            print(f"  obs shuffle: {min(out_start + block_rows, n):,}/{n:,} rows written")
+            header = out_start == 0
+            how = "arrow"
+            text = None
+            if use_arrow:
+                try:
+                    text = _block_tsv_arrow(block, cols, header)
+                except pa.ArrowInvalid:
+                    how = "pandas (a value needs quoting)"
+            if text is None:
+                how = how if use_arrow else "pandas"
+                text = _block_tsv_pandas(block, header)
+            fout.write(text)
+            print(f"  obs shuffle: {min(out_start + block_rows, n):,}/{n:,} rows written ({how})")
 
 
 def obs_tsv_to_parquet(tsv_path, parquet_path, chunk_rows=200_000):
