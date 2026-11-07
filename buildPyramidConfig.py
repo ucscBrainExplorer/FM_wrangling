@@ -1,8 +1,9 @@
 """
 buildPyramidConfig.py — generate a pyramid config JSON from obs.tsv.gz
 
-Columns are ordered: pinned cell label, HIGH_PRIORITY features, then
-all remaining eligible columns alphabetically.
+Columns are ordered: pinned cell label (or the --pinned columns, in the order given), then every other selected
+column in one case-insensitive alphabetical list (HIGH_PRIORITY columns are always selected, but not listed first:
+a separate block made columns hard to find).
 
 Usage:
     python3 FM_wrangling/buildPyramidConfig.py \
@@ -39,7 +40,9 @@ parser.add_argument("--out", default=None,
                     help="Output JSON path (default: <results_dir>/pyramid_<umap stem minus umap_>_config.json, "
                          "e.g. umap_e20.npy -> pyramid_e20_config.json)")
 parser.add_argument("--pinned", default=None,
-                    help="Column to pin as the primary cell label (overrides CELL_LABEL_CANDIDATES)")
+                    help="Column to pin as the primary cell label (overrides CELL_LABEL_CANDIDATES); or a "
+                         "comma-separated list (e.g. concensus_subclass,species), pinned first in that order, "
+                         "the first one being the cell label")
 parser.add_argument("--columns", default=None,
                     help="Comma-separated list of columns to restrict the build to "
                          "(for a partial/first-run config). All other columns are ignored "
@@ -54,8 +57,10 @@ header_cols = None
 if args.pinned or args.columns:
     header_cols = pd.read_csv(obs_path, sep='\t', nrows=0).columns.tolist()
 
-if args.pinned and args.pinned not in header_cols:
-    raise ValueError(f"--pinned column '{args.pinned}' not found in {obs_path}\n"
+pinned_list = [c.strip() for c in args.pinned.split(",") if c.strip()] if args.pinned else []
+missing_pinned = [c for c in pinned_list if c not in header_cols]
+if missing_pinned:
+    raise ValueError(f"--pinned columns {missing_pinned} not found in {obs_path}\n"
                      f"Available columns: {header_cols}")
 
 restrict_cols = None
@@ -76,8 +81,8 @@ CELL_LABEL_CANDIDATES = CELL_LABEL_PRIORITY
 usecols = None
 if restrict_cols is not None:
     keep = set(restrict_cols)
-    if args.pinned:
-        keep.add(args.pinned)
+    if pinned_list:
+        keep.update(pinned_list)
     else:
         keep.update(c for c in CELL_LABEL_CANDIDATES if c in header_cols)
     usecols = [c for c in header_cols if c in keep]
@@ -194,10 +199,11 @@ def classify_column(col, series):
     return feature_type, None
 
 # Determine the top cell label column to pin first (CELL_LABEL_CANDIDATES defined above)
-if args.pinned:
-    pinned = args.pinned
+if pinned_list:
+    pinned = pinned_list[0]
 else:
     pinned = pick_cell_label(obs)
+    pinned_list = [pinned] if pinned else []
 
 # Classify all candidate columns
 eligible = {}   # col -> feature_type
@@ -205,7 +211,7 @@ rejected = []
 
 candidate_cols = obs.columns if restrict_cols is None else restrict_cols
 for col in candidate_cols:
-    if col in SKIP_COLS or col == pinned or col.endswith("_term_id"):
+    if col in SKIP_COLS or col in pinned_list or col.endswith("_term_id"):
         continue
     feature_type, reason = classify_column(col, obs[col])
     if feature_type is not None:
@@ -213,14 +219,19 @@ for col in candidate_cols:
     else:
         rejected.append((col, reason))
 
-# Build selection: pinned cell label → HIGH_PRIORITY (alpha) → rest (alpha)
-high_priority_cols = sorted(c for c in eligible if c in HIGH_PRIORITY)
-rest_cols = sorted([c for c in eligible if c not in HIGH_PRIORITY])
+# Build selection: pinned columns, then all others in one case-insensitive alphabetical list
+# (HIGH_PRIORITY only decides inclusion, in classify_column, not order)
+rest_cols = sorted(eligible, key=lambda c: (c.casefold(), c))
 
-selected = []
-if pinned:
-    selected.append(pinned)
-selected += high_priority_cols + rest_cols
+# Extra pinned columns (after the cell label) keep their own type if eligible, else are shown as categories
+pinned_types = {}
+for col in pinned_list[1:]:
+    feature_type, reason = classify_column(col, obs[col])
+    if feature_type is None:
+        print(f"  note: pinned column {col} would be rejected ({reason}); kept as a category")
+    pinned_types[col] = feature_type or "category"
+
+selected = list(pinned_list) + rest_cols
 
 # If normalized_organism is present, drop organism (redundant)
 if "normalized_organism" in selected:
@@ -228,6 +239,7 @@ if "normalized_organism" in selected:
 
 # Print summary
 type_map = {pinned: "category"} if pinned else {}
+type_map.update(pinned_types)
 type_map.update(eligible)
 
 print(f"\nSelected {len(selected)} features:")
@@ -235,7 +247,7 @@ for col in selected:
     series = obs[col]
     n_unique = series.nunique()
     null_rate = series.isnull().mean()
-    marker = " [HIGH_PRIORITY]" if col in HIGH_PRIORITY or col == pinned else ""
+    marker = " [PINNED]" if col in pinned_list else (" [HIGH_PRIORITY]" if col in HIGH_PRIORITY else "")
     print(f"  {col}  ({n_unique} unique, {null_rate:.0%} null)  [{type_map.get(col, 'category')}]{marker}")
 
 if rejected:

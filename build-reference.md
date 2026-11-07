@@ -154,6 +154,46 @@ On startup the script validates that:
 - All datasets in `<DUP_DIR>/` are listed in `datasetLists/ignore_datasets.txt`
 - All `ucsc-*` prefixed datasets in `<NPY_DIR>/` and `<DUP_DIR>/` are listed in `datasetLists/ucsc_datasets.txt`
 
+Run it from the shared folder (`/public/groups/hausslerlab/projects/latentbrain`, as `run_build.sh` does). It finds
+`<NPY_DIR>/` relative to the current directory, and from anywhere else it stops with "no source URL" for every dataset.
+
+### Datasets from several consortia: decide the obs columns first
+
+When datasets come from different consortia (different column names and vocabularies), choose the combined columns
+**before** the combine. Then `_full/` or the atlas is written once with harmonized, trimmed obs:
+
+1. Profile each source obs in `<NPY_DIR>/<id>_obs.tsv`: column names, fill rate, values, and whether files from
+   one consortium share a header.
+2. Write the column list for `--obs-columns-file` and the `datasetLists/manual_column.json` rules
+   ([Review obs](#review-obs-and-fill-in-manual_columnjson)). With many datasets or long value maps, generate the
+   rules with a script kept in the atlas folder. The script builds each map from the values in the source obs and
+   stops on any unmapped value. It is then also the record of how each column was made.
+3. Keep the source column of every derived column in the list. A rule whose source column was dropped cannot be
+   changed later with `annotate_obs.py`. Changing it would need an `--obs-only` re-combine plus
+   `apply_shuffle_index.py`.
+4. Test with `--obs-only` into a scratch `--results_dir`. It reads every source row through the rules and writes no
+   embedding.
+
+Rules are keyed by dataset ID and shared by every atlas that uses that ID. A rule that adds a new column to a dataset
+also adds it to older atlases with that dataset the next time `annotate_obs.py` runs there, so prefer existing column
+names where they do not collide. Example: `HMBA_SEAAD_PsychAD_ucebrain768bicans2048_shuffle/`
+(`README.md`, `make_obs_rules.py`, `obs_columns.txt`).
+
+### A subset of cells: combine into `_full/`, then filter rows
+
+To keep only some cells, for example by assay or donor age:
+1. Combine everything with `--shuffle` into `<ATLAS_DIR>/_full/`.
+2. Run a small filter script that writes `<ATLAS_DIR>/uce.h5` and `obs.tsv.gz` from the kept rows, in the same
+   order. Filtering a shuffled file keeps it shuffled, so no second shuffle is needed.
+3. Copy `_full/{dataset_ids.tsv,dataset_provenance.json,wrangling_notes_combineEmbedding.txt}` up to `<ATLAS_DIR>/`.
+4. Have the script write `wrangling_notes_custom.txt`, which `annotate_obs.py` adds to the wrangling notes.
+
+Examples:
+- `HNOCA_Extended_10x3v3_cell_768d/subset_10x3v3_cell.py`: assay and suspension type.
+- `HMBA_SEAAD_PsychAD_ucebrain768bicans2048_shuffle/filter_psychad_adult.py`: PsychAD age ≥ 18. It streams obs line
+  by line instead of loading it into pandas, and fills values the rules cannot make, such as a library ID cut from
+  the cell ID.
+
 ### Single dataset — use `shuffle.py` directly
 
 If only one dataset needs to be shuffled (no combine step needed):
@@ -311,11 +351,16 @@ This auto-generates `<ATLAS_DIR>/pyramid_e{N}_config.json` listing the obs colum
    `cell_type`), `cell_type` present in the obs. The list is `CELL_LABEL_PRIORITY` in `cell_label.py`, which
    `annotate_obs.py` also uses for the cell-type counts in `metadata_summary.json`, so the map and the site's summary
    use the same column. Check which one was picked in the printed summary; `--pinned <column>` overrides it.
-2. **HIGH_PRIORITY columns**, always included regardless of null rate or number of categories, in alphabetical order
-   (the list is `HIGH_PRIORITY` in `buildPyramidConfig.py`: always `sample_label` and `donor_id`, plus e.g. `assay`,
-   `disease`, `tissue`, `normalized_organism`).
-3. **Every other eligible column**, alphabetically: at most 50% null (within at least one collection), and for text
-   columns fewer categories than a tenth of the cells.
+   `--pinned` also takes a comma-separated list, pinned first in that order, the first being the cell label: for
+   example `--pinned concensus_subclass,species` for a cross-species atlas.
+2. **Every other column, in one alphabetical list, ignoring case** (so `Class` sits between `chemistry` and
+   `cluster`, not at the top). The list includes:
+   - **HIGH_PRIORITY columns**, always: `HIGH_PRIORITY` in `buildPyramidConfig.py`, which is always `sample_label`
+     and `donor_id`, plus for example `assay`, `disease`, `tissue` and `normalized_organism`. They are included
+     regardless of null rate or category count, but are not listed first; a separate block made columns hard to
+     find (changed 2026-11-07).
+   - **Every other eligible column:** at most 50% null (within at least one collection) and, for text columns, fewer
+     categories than a tenth of the cells.
 
 `--columns a,b,c` limits the config to those columns.
 
