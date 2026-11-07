@@ -190,7 +190,9 @@ kubectl get jobs -n braingeneers | grep knn              # progress
 
 Each index type is one Kubernetes Job (`uce-job-knn-<dir>-k<K>-<index>`; a long `<dir>` is cut and ends with a short
 hash of the full name) that reads `uce.h5` from
-`s3://latentbrain/<ATLAS_DIR>/` and writes back next to it: `index_<INDEX_TYPE>.faiss`, `knn_<K>_<INDEX_TYPE>.npz`.
+`s3://latentbrain/<ATLAS_DIR>/` and writes back next to it: `index_<INDEX_TYPE>.faiss`, `knn_<K>_<INDEX_TYPE>.npz`, and, for the first index type
+listed, a copy named `index.faiss`. The production backend needs the atlas index as `index.faiss` or a file with
+`ivfflat` in its name, so a PQ-only atlas relies on that copy.
 PUMAP training reads the KNN file from S3, so it does not need to be copied to `<WORK>`.
 
 ### PCA
