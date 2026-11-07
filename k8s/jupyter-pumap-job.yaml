@@ -68,6 +68,7 @@ spec:
                 - k8s-chase-ci-07.calit2.optiputer.net
                 - ry-gpu-08.sdsc.optiputer.net
                 - gpn-fiona-mizzou-8.rnet.missouri.edu
+                - hcc-nrp-shor-c6017.unl.edu  # A10: illegal memory access on in-range gathers (2026-11-06)
       containers:
         - name: jupyter
           image: python:3.9.23-slim
@@ -107,15 +108,17 @@ spec:
             - name: shared-data
               mountPath: /mnt/pvc
               subPath: pumap
-          resources:  # 32Gi covers 500K-cell runs; raise it for the large combined datasets
+          # Training runs on the GPU (num_workers=0), so 1 CPU is enough; more CPUs only
+          # speed up the graph build. 13.5M-cell HMBA used about 14 GB in the kernel.
+          resources:
             requests:
               nvidia.com/gpu: 1
-              cpu: 4
-              memory: 32Gi
+              cpu: 1
+              memory: 48Gi
             limits:
               nvidia.com/gpu: 1
-              cpu: 4800m
-              memory: 32Gi
+              cpu: 1200m
+              memory: 48Gi
       volumes:
         - name: shared-data
           persistentVolumeClaim:
