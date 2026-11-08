@@ -363,6 +363,28 @@
         "multiome": "EFO:0030059",
         "snRNAseq": "EFO:0009922"
       }
+    },
+    "sex": {
+      "value": "sex",
+      "type": "map",
+      "map": {
+        "Female": "female",
+        "Male": "male"
+      },
+      "note": "CELLxGENE spelling"
+    },
+    "sex_ontology_term_id": {
+      "value": "self_reported_sex_ontology_term_id",
+      "type": "column",
+      "note": "the source keeps the sex PATO ID under this older column name"
+    },
+    "disease": {
+      "value": "disease",
+      "type": "map",
+      "map": {
+        "control": "normal"
+      },
+      "note": "CELLxGENE label for PATO:0000461, the ID the source already has"
     }
   },
   "WB_HMBA_Macaque_AIT_v0.5": {
@@ -401,7 +423,29 @@
       "note": "source age has no unit; years (adult animals)"
     },
     "collection_doi_label": "Human and Mammalian Brain Atlas v0.5",
-    "dataset_title": "WB_HMBA_Macaque_AIT"
+    "dataset_title": "WB_HMBA_Macaque_AIT",
+    "sex": {
+      "value": "sex",
+      "type": "map",
+      "map": {
+        "Female": "female",
+        "Male": "male"
+      },
+      "note": "CELLxGENE spelling"
+    },
+    "sex_ontology_term_id": {
+      "value": "self_reported_sex_ontology_term_id",
+      "type": "column",
+      "note": "the source keeps the sex PATO ID under this older column name"
+    },
+    "disease": {
+      "value": "disease",
+      "type": "map",
+      "map": {
+        "control": "normal"
+      },
+      "note": "CELLxGENE label for PATO:0000461, the ID the source already has"
+    }
   },
   "WB_HMBA_marmoset_AIT_v0.5": {
     "cell_type": {
@@ -437,7 +481,29 @@
       "note": "source age has no unit; years (adult animals)"
     },
     "collection_doi_label": "Human and Mammalian Brain Atlas v0.5",
-    "dataset_title": "WB_HMBA_marmoset_AIT"
+    "dataset_title": "WB_HMBA_marmoset_AIT",
+    "sex": {
+      "value": "sex",
+      "type": "map",
+      "map": {
+        "Female": "female",
+        "Male": "male"
+      },
+      "note": "CELLxGENE spelling"
+    },
+    "sex_ontology_term_id": {
+      "value": "self_reported_sex_ontology_term_id",
+      "type": "column",
+      "note": "the source keeps the sex PATO ID under this older column name"
+    },
+    "disease": {
+      "value": "disease",
+      "type": "map",
+      "map": {
+        "control": "normal"
+      },
+      "note": "CELLxGENE label for PATO:0000461, the ID the source already has"
+    }
   },
   "ucsc-92b37feb-aa2c-40d7-bd90-0a9b5ddb3b27": {
     "organism": {
@@ -668,11 +734,6 @@
     "dataset_title": "Allen whole mouse brain MERFISH, mouse C57BL6J-638850"
   },
   "SEAAD_AnG_RNAseq_final-nuclei.2026-06-22": {
-    "study": {
-      "value": "SEA-AD",
-      "type": "static",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11)"
-    },
     "donor_id": {
       "value": "Donor ID",
       "type": "column",
@@ -695,37 +756,6 @@
         "Male": "PATO:0000384"
       }
     },
-    "age_years": {
-      "value": "Age at Death",
-      "type": "map",
-      "map": {
-        "100.0": "100",
-        "68.0": "68",
-        "69.0": "69",
-        "70.0": "70",
-        "72.0": "72",
-        "75.0": "75",
-        "78.0": "78",
-        "80.0": "80",
-        "81.0": "81",
-        "82.0": "82",
-        "83.0": "83",
-        "84.0": "84",
-        "87.0": "87",
-        "88.0": "88",
-        "89.0": "89",
-        "90.0": "90",
-        "91.0": "91",
-        "92.0": "92",
-        "93.0": "93",
-        "94.0": "94",
-        "96.0": "96",
-        "97.0": "97",
-        "98.0": "98",
-        "99.0": "99"
-      },
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): age at death"
-    },
     "organism": {
       "value": "Homo sapiens",
       "type": "static"
@@ -742,16 +772,6 @@
     "tissue_type": {
       "value": "tissue",
       "type": "static"
-    },
-    "region_coarse": {
-      "value": "Cerebral cortex",
-      "type": "static",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): as HMBA brain region (HMBA files LEC/MEC/MTG/V1C under Cerebral cortex, HIP under Hippocampus)"
-    },
-    "dissection": {
-      "value": "AnG",
-      "type": "static",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11)"
     },
     "assay": {
       "value": "method",
@@ -783,7 +803,7 @@
         "Dementia": "dementia",
         "No dementia": "normal"
       },
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): from Cognitive Status; neuropathology is in AD_status"
+      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): from Cognitive Status; neuropathology is in AD_status (finalize_atlas.py)"
     },
     "disease_ontology_term_id": {
       "value": "Cognitive Status",
@@ -793,27 +813,6 @@
         "No dementia": "PATO:0000461"
       }
     },
-    "AD_status": {
-      "value": "Overall AD neuropathological Change",
-      "type": "map",
-      "map": {
-        "High": "Yes",
-        "Intermediate": "Yes",
-        "Low": "No",
-        "Not AD": "No"
-      },
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): ADNC Intermediate/High = Yes (NIA-AA: sufficient explanation for dementia)"
-    },
-    "n_counts": {
-      "value": "Number of UMIs",
-      "type": "column",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11)"
-    },
-    "sample_id": {
-      "value": "library_prep",
-      "type": "column",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): library; the source sample_id is the cell barcode"
-    },
     "cell_type": {
       "value": "Subclass",
       "type": "column",
@@ -821,11 +820,6 @@
     }
   },
   "SEAAD_DFC_RNAseq_final-nuclei.2026-06-22": {
-    "study": {
-      "value": "SEA-AD",
-      "type": "static",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11)"
-    },
     "donor_id": {
       "value": "Donor ID",
       "type": "column",
@@ -848,42 +842,6 @@
         "Male": "PATO:0000384"
       }
     },
-    "age_years": {
-      "value": "Age at Death",
-      "type": "map",
-      "map": {
-        "100.0": "100",
-        "102.0": "102",
-        "68.0": "68",
-        "69.0": "69",
-        "70.0": "70",
-        "72.0": "72",
-        "75.0": "75",
-        "77.0": "77",
-        "78.0": "78",
-        "80.0": "80",
-        "81.0": "81",
-        "82.0": "82",
-        "83.0": "83",
-        "84.0": "84",
-        "85.0": "85",
-        "86.0": "86",
-        "87.0": "87",
-        "88.0": "88",
-        "89.0": "89",
-        "90.0": "90",
-        "91.0": "91",
-        "92.0": "92",
-        "93.0": "93",
-        "94.0": "94",
-        "95.0": "95",
-        "96.0": "96",
-        "97.0": "97",
-        "98.0": "98",
-        "99.0": "99"
-      },
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): age at death"
-    },
     "organism": {
       "value": "Homo sapiens",
       "type": "static"
@@ -900,16 +858,6 @@
     "tissue_type": {
       "value": "tissue",
       "type": "static"
-    },
-    "region_coarse": {
-      "value": "Cerebral cortex",
-      "type": "static",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): as HMBA brain region (HMBA files LEC/MEC/MTG/V1C under Cerebral cortex, HIP under Hippocampus)"
-    },
-    "dissection": {
-      "value": "DFC",
-      "type": "static",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11)"
     },
     "assay": {
       "value": "method",
@@ -943,7 +891,7 @@
         "Dementia": "dementia",
         "No dementia": "normal"
       },
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): from Cognitive Status; neuropathology is in AD_status"
+      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): from Cognitive Status; neuropathology is in AD_status (finalize_atlas.py)"
     },
     "disease_ontology_term_id": {
       "value": "Cognitive Status",
@@ -953,27 +901,6 @@
         "No dementia": "PATO:0000461"
       }
     },
-    "AD_status": {
-      "value": "Overall AD neuropathological Change",
-      "type": "map",
-      "map": {
-        "High": "Yes",
-        "Intermediate": "Yes",
-        "Low": "No",
-        "Not AD": "No"
-      },
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): ADNC Intermediate/High = Yes (NIA-AA: sufficient explanation for dementia)"
-    },
-    "n_counts": {
-      "value": "Number of UMIs",
-      "type": "column",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11)"
-    },
-    "sample_id": {
-      "value": "library_prep",
-      "type": "column",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): library; the source sample_id is the cell barcode"
-    },
     "cell_type": {
       "value": "Subclass",
       "type": "column",
@@ -981,11 +908,6 @@
     }
   },
   "SEAAD_FI_RNAseq_final-nuclei.2026-06-22": {
-    "study": {
-      "value": "SEA-AD",
-      "type": "static",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11)"
-    },
     "donor_id": {
       "value": "Donor ID",
       "type": "column",
@@ -1007,37 +929,6 @@
         "Female": "PATO:0000383",
         "Male": "PATO:0000384"
       }
-    },
-    "age_years": {
-      "value": "Age at Death",
-      "type": "map",
-      "map": {
-        "100.0": "100",
-        "68.0": "68",
-        "69.0": "69",
-        "70.0": "70",
-        "72.0": "72",
-        "75.0": "75",
-        "78.0": "78",
-        "80.0": "80",
-        "81.0": "81",
-        "82.0": "82",
-        "83.0": "83",
-        "84.0": "84",
-        "87.0": "87",
-        "88.0": "88",
-        "89.0": "89",
-        "90.0": "90",
-        "91.0": "91",
-        "92.0": "92",
-        "93.0": "93",
-        "94.0": "94",
-        "96.0": "96",
-        "97.0": "97",
-        "98.0": "98",
-        "99.0": "99"
-      },
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): age at death"
     },
     "organism": {
       "value": "Homo sapiens",
@@ -1056,16 +947,6 @@
       "value": "tissue",
       "type": "static"
     },
-    "region_coarse": {
-      "value": "Cerebral cortex",
-      "type": "static",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): as HMBA brain region (HMBA files LEC/MEC/MTG/V1C under Cerebral cortex, HIP under Hippocampus)"
-    },
-    "dissection": {
-      "value": "FI",
-      "type": "static",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11)"
-    },
     "assay": {
       "value": "method",
       "type": "map",
@@ -1096,7 +977,7 @@
         "Dementia": "dementia",
         "No dementia": "normal"
       },
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): from Cognitive Status; neuropathology is in AD_status"
+      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): from Cognitive Status; neuropathology is in AD_status (finalize_atlas.py)"
     },
     "disease_ontology_term_id": {
       "value": "Cognitive Status",
@@ -1106,27 +987,6 @@
         "No dementia": "PATO:0000461"
       }
     },
-    "AD_status": {
-      "value": "Overall AD neuropathological Change",
-      "type": "map",
-      "map": {
-        "High": "Yes",
-        "Intermediate": "Yes",
-        "Low": "No",
-        "Not AD": "No"
-      },
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): ADNC Intermediate/High = Yes (NIA-AA: sufficient explanation for dementia)"
-    },
-    "n_counts": {
-      "value": "Number of UMIs",
-      "type": "column",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11)"
-    },
-    "sample_id": {
-      "value": "library_prep",
-      "type": "column",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): library; the source sample_id is the cell barcode"
-    },
     "cell_type": {
       "value": "Subclass",
       "type": "column",
@@ -1134,11 +994,6 @@
     }
   },
   "SEAAD_HIP_RNAseq_final-nuclei.2026-06-22": {
-    "study": {
-      "value": "SEA-AD",
-      "type": "static",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11)"
-    },
     "donor_id": {
       "value": "Donor ID",
       "type": "column",
@@ -1160,37 +1015,6 @@
         "Female": "PATO:0000383",
         "Male": "PATO:0000384"
       }
-    },
-    "age_years": {
-      "value": "Age at Death",
-      "type": "map",
-      "map": {
-        "100.0": "100",
-        "68.0": "68",
-        "69.0": "69",
-        "70.0": "70",
-        "72.0": "72",
-        "75.0": "75",
-        "78.0": "78",
-        "80.0": "80",
-        "81.0": "81",
-        "82.0": "82",
-        "83.0": "83",
-        "84.0": "84",
-        "87.0": "87",
-        "88.0": "88",
-        "89.0": "89",
-        "90.0": "90",
-        "91.0": "91",
-        "92.0": "92",
-        "93.0": "93",
-        "94.0": "94",
-        "96.0": "96",
-        "97.0": "97",
-        "98.0": "98",
-        "99.0": "99"
-      },
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): age at death"
     },
     "organism": {
       "value": "Homo sapiens",
@@ -1209,16 +1033,6 @@
       "value": "tissue",
       "type": "static"
     },
-    "region_coarse": {
-      "value": "Hippocampus",
-      "type": "static",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): as HMBA brain region (HMBA files LEC/MEC/MTG/V1C under Cerebral cortex, HIP under Hippocampus)"
-    },
-    "dissection": {
-      "value": "HIP",
-      "type": "static",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11)"
-    },
     "assay": {
       "value": "method",
       "type": "map",
@@ -1249,7 +1063,7 @@
         "Dementia": "dementia",
         "No dementia": "normal"
       },
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): from Cognitive Status; neuropathology is in AD_status"
+      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): from Cognitive Status; neuropathology is in AD_status (finalize_atlas.py)"
     },
     "disease_ontology_term_id": {
       "value": "Cognitive Status",
@@ -1259,27 +1073,6 @@
         "No dementia": "PATO:0000461"
       }
     },
-    "AD_status": {
-      "value": "Overall AD neuropathological Change",
-      "type": "map",
-      "map": {
-        "High": "Yes",
-        "Intermediate": "Yes",
-        "Low": "No",
-        "Not AD": "No"
-      },
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): ADNC Intermediate/High = Yes (NIA-AA: sufficient explanation for dementia)"
-    },
-    "n_counts": {
-      "value": "Number of UMIs",
-      "type": "column",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11)"
-    },
-    "sample_id": {
-      "value": "library_prep",
-      "type": "column",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): library; the source sample_id is the cell barcode"
-    },
     "cell_type": {
       "value": "Subclass",
       "type": "column",
@@ -1287,11 +1080,6 @@
     }
   },
   "SEAAD_ITG_RNAseq_final-nuclei.2026-06-22": {
-    "study": {
-      "value": "SEA-AD",
-      "type": "static",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11)"
-    },
     "donor_id": {
       "value": "Donor ID",
       "type": "column",
@@ -1314,37 +1102,6 @@
         "Male": "PATO:0000384"
       }
     },
-    "age_years": {
-      "value": "Age at Death",
-      "type": "map",
-      "map": {
-        "100.0": "100",
-        "68.0": "68",
-        "69.0": "69",
-        "70.0": "70",
-        "72.0": "72",
-        "75.0": "75",
-        "78.0": "78",
-        "80.0": "80",
-        "81.0": "81",
-        "82.0": "82",
-        "83.0": "83",
-        "84.0": "84",
-        "87.0": "87",
-        "88.0": "88",
-        "89.0": "89",
-        "90.0": "90",
-        "91.0": "91",
-        "92.0": "92",
-        "93.0": "93",
-        "94.0": "94",
-        "96.0": "96",
-        "97.0": "97",
-        "98.0": "98",
-        "99.0": "99"
-      },
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): age at death"
-    },
     "organism": {
       "value": "Homo sapiens",
       "type": "static"
@@ -1361,16 +1118,6 @@
     "tissue_type": {
       "value": "tissue",
       "type": "static"
-    },
-    "region_coarse": {
-      "value": "Cerebral cortex",
-      "type": "static",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): as HMBA brain region (HMBA files LEC/MEC/MTG/V1C under Cerebral cortex, HIP under Hippocampus)"
-    },
-    "dissection": {
-      "value": "ITG",
-      "type": "static",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11)"
     },
     "assay": {
       "value": "method",
@@ -1402,7 +1149,7 @@
         "Dementia": "dementia",
         "No dementia": "normal"
       },
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): from Cognitive Status; neuropathology is in AD_status"
+      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): from Cognitive Status; neuropathology is in AD_status (finalize_atlas.py)"
     },
     "disease_ontology_term_id": {
       "value": "Cognitive Status",
@@ -1412,27 +1159,6 @@
         "No dementia": "PATO:0000461"
       }
     },
-    "AD_status": {
-      "value": "Overall AD neuropathological Change",
-      "type": "map",
-      "map": {
-        "High": "Yes",
-        "Intermediate": "Yes",
-        "Low": "No",
-        "Not AD": "No"
-      },
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): ADNC Intermediate/High = Yes (NIA-AA: sufficient explanation for dementia)"
-    },
-    "n_counts": {
-      "value": "Number of UMIs",
-      "type": "column",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11)"
-    },
-    "sample_id": {
-      "value": "library_prep",
-      "type": "column",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): library; the source sample_id is the cell barcode"
-    },
     "cell_type": {
       "value": "Subclass",
       "type": "column",
@@ -1440,11 +1166,6 @@
     }
   },
   "SEAAD_LEC_RNAseq_final-nuclei.2026-06-22": {
-    "study": {
-      "value": "SEA-AD",
-      "type": "static",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11)"
-    },
     "donor_id": {
       "value": "Donor ID",
       "type": "column",
@@ -1467,35 +1188,6 @@
         "Male": "PATO:0000384"
       }
     },
-    "age_years": {
-      "value": "Age at Death",
-      "type": "map",
-      "map": {
-        "100.0": "100",
-        "68.0": "68",
-        "69.0": "69",
-        "70.0": "70",
-        "72.0": "72",
-        "75.0": "75",
-        "78.0": "78",
-        "80.0": "80",
-        "81.0": "81",
-        "82.0": "82",
-        "83.0": "83",
-        "84.0": "84",
-        "87.0": "87",
-        "89.0": "89",
-        "90.0": "90",
-        "91.0": "91",
-        "92.0": "92",
-        "93.0": "93",
-        "94.0": "94",
-        "96.0": "96",
-        "98.0": "98",
-        "99.0": "99"
-      },
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): age at death"
-    },
     "organism": {
       "value": "Homo sapiens",
       "type": "static"
@@ -1512,16 +1204,6 @@
     "tissue_type": {
       "value": "tissue",
       "type": "static"
-    },
-    "region_coarse": {
-      "value": "Cerebral cortex",
-      "type": "static",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): as HMBA brain region (HMBA files LEC/MEC/MTG/V1C under Cerebral cortex, HIP under Hippocampus)"
-    },
-    "dissection": {
-      "value": "LEC",
-      "type": "static",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11)"
     },
     "assay": {
       "value": "method",
@@ -1553,7 +1235,7 @@
         "Dementia": "dementia",
         "No dementia": "normal"
       },
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): from Cognitive Status; neuropathology is in AD_status"
+      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): from Cognitive Status; neuropathology is in AD_status (finalize_atlas.py)"
     },
     "disease_ontology_term_id": {
       "value": "Cognitive Status",
@@ -1563,27 +1245,6 @@
         "No dementia": "PATO:0000461"
       }
     },
-    "AD_status": {
-      "value": "Overall AD neuropathological Change",
-      "type": "map",
-      "map": {
-        "High": "Yes",
-        "Intermediate": "Yes",
-        "Low": "No",
-        "Not AD": "No"
-      },
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): ADNC Intermediate/High = Yes (NIA-AA: sufficient explanation for dementia)"
-    },
-    "n_counts": {
-      "value": "Number of UMIs",
-      "type": "column",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11)"
-    },
-    "sample_id": {
-      "value": "library_prep",
-      "type": "column",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): library; the source sample_id is the cell barcode"
-    },
     "cell_type": {
       "value": "Subclass",
       "type": "column",
@@ -1591,11 +1252,6 @@
     }
   },
   "SEAAD_MEC_RNAseq_final-nuclei.2026-06-22": {
-    "study": {
-      "value": "SEA-AD",
-      "type": "static",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11)"
-    },
     "donor_id": {
       "value": "Donor ID",
       "type": "column",
@@ -1618,43 +1274,6 @@
         "Male": "PATO:0000384"
       }
     },
-    "age_years": {
-      "value": "Age at Death",
-      "type": "map",
-      "map": {
-        "100.0": "100",
-        "102.0": "102",
-        "65.0": "65",
-        "68.0": "68",
-        "69.0": "69",
-        "70.0": "70",
-        "72.0": "72",
-        "75.0": "75",
-        "77.0": "77",
-        "78.0": "78",
-        "80.0": "80",
-        "81.0": "81",
-        "82.0": "82",
-        "83.0": "83",
-        "84.0": "84",
-        "85.0": "85",
-        "86.0": "86",
-        "87.0": "87",
-        "88.0": "88",
-        "89.0": "89",
-        "90.0": "90",
-        "91.0": "91",
-        "92.0": "92",
-        "93.0": "93",
-        "94.0": "94",
-        "95.0": "95",
-        "96.0": "96",
-        "97.0": "97",
-        "98.0": "98",
-        "99.0": "99"
-      },
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): age at death"
-    },
     "organism": {
       "value": "Homo sapiens",
       "type": "static"
@@ -1671,16 +1290,6 @@
     "tissue_type": {
       "value": "tissue",
       "type": "static"
-    },
-    "region_coarse": {
-      "value": "Cerebral cortex",
-      "type": "static",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): as HMBA brain region (HMBA files LEC/MEC/MTG/V1C under Cerebral cortex, HIP under Hippocampus)"
-    },
-    "dissection": {
-      "value": "MEC",
-      "type": "static",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11)"
     },
     "assay": {
       "value": "method",
@@ -1712,7 +1321,7 @@
         "Dementia": "dementia",
         "No dementia": "normal"
       },
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): from Cognitive Status; neuropathology is in AD_status"
+      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): from Cognitive Status; neuropathology is in AD_status (finalize_atlas.py)"
     },
     "disease_ontology_term_id": {
       "value": "Cognitive Status",
@@ -1722,27 +1331,6 @@
         "No dementia": "PATO:0000461"
       }
     },
-    "AD_status": {
-      "value": "Overall AD neuropathological Change",
-      "type": "map",
-      "map": {
-        "High": "Yes",
-        "Intermediate": "Yes",
-        "Low": "No",
-        "Not AD": "No"
-      },
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): ADNC Intermediate/High = Yes (NIA-AA: sufficient explanation for dementia)"
-    },
-    "n_counts": {
-      "value": "Number of UMIs",
-      "type": "column",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11)"
-    },
-    "sample_id": {
-      "value": "library_prep",
-      "type": "column",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): library; the source sample_id is the cell barcode"
-    },
     "cell_type": {
       "value": "Subclass",
       "type": "column",
@@ -1750,11 +1338,6 @@
     }
   },
   "SEAAD_MTG_RNAseq_final-nuclei.2026-06-22": {
-    "study": {
-      "value": "SEA-AD",
-      "type": "static",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11)"
-    },
     "donor_id": {
       "value": "Donor ID",
       "type": "column",
@@ -1777,43 +1360,6 @@
         "Male": "PATO:0000384"
       }
     },
-    "age_years": {
-      "value": "Age at Death",
-      "type": "map",
-      "map": {
-        "100.0": "100",
-        "102.0": "102",
-        "65.0": "65",
-        "68.0": "68",
-        "69.0": "69",
-        "70.0": "70",
-        "72.0": "72",
-        "75.0": "75",
-        "77.0": "77",
-        "78.0": "78",
-        "80.0": "80",
-        "81.0": "81",
-        "82.0": "82",
-        "83.0": "83",
-        "84.0": "84",
-        "85.0": "85",
-        "86.0": "86",
-        "87.0": "87",
-        "88.0": "88",
-        "89.0": "89",
-        "90.0": "90",
-        "91.0": "91",
-        "92.0": "92",
-        "93.0": "93",
-        "94.0": "94",
-        "95.0": "95",
-        "96.0": "96",
-        "97.0": "97",
-        "98.0": "98",
-        "99.0": "99"
-      },
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): age at death"
-    },
     "organism": {
       "value": "Homo sapiens",
       "type": "static"
@@ -1830,16 +1376,6 @@
     "tissue_type": {
       "value": "tissue",
       "type": "static"
-    },
-    "region_coarse": {
-      "value": "Cerebral cortex",
-      "type": "static",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): as HMBA brain region (HMBA files LEC/MEC/MTG/V1C under Cerebral cortex, HIP under Hippocampus)"
-    },
-    "dissection": {
-      "value": "MTG",
-      "type": "static",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11)"
     },
     "assay": {
       "value": "method",
@@ -1873,7 +1409,7 @@
         "Dementia": "dementia",
         "No dementia": "normal"
       },
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): from Cognitive Status; neuropathology is in AD_status"
+      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): from Cognitive Status; neuropathology is in AD_status (finalize_atlas.py)"
     },
     "disease_ontology_term_id": {
       "value": "Cognitive Status",
@@ -1883,27 +1419,6 @@
         "No dementia": "PATO:0000461"
       }
     },
-    "AD_status": {
-      "value": "Overall AD neuropathological Change",
-      "type": "map",
-      "map": {
-        "High": "Yes",
-        "Intermediate": "Yes",
-        "Low": "No",
-        "Not AD": "No"
-      },
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): ADNC Intermediate/High = Yes (NIA-AA: sufficient explanation for dementia)"
-    },
-    "n_counts": {
-      "value": "Number of UMIs",
-      "type": "column",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11)"
-    },
-    "sample_id": {
-      "value": "library_prep",
-      "type": "column",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): library; the source sample_id is the cell barcode"
-    },
     "cell_type": {
       "value": "Subclass",
       "type": "column",
@@ -1911,11 +1426,6 @@
     }
   },
   "SEAAD_STG_RNAseq_final-nuclei.2026-06-22": {
-    "study": {
-      "value": "SEA-AD",
-      "type": "static",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11)"
-    },
     "donor_id": {
       "value": "Donor ID",
       "type": "column",
@@ -1938,37 +1448,6 @@
         "Male": "PATO:0000384"
       }
     },
-    "age_years": {
-      "value": "Age at Death",
-      "type": "map",
-      "map": {
-        "100.0": "100",
-        "68.0": "68",
-        "69.0": "69",
-        "70.0": "70",
-        "72.0": "72",
-        "75.0": "75",
-        "78.0": "78",
-        "80.0": "80",
-        "81.0": "81",
-        "82.0": "82",
-        "83.0": "83",
-        "84.0": "84",
-        "87.0": "87",
-        "88.0": "88",
-        "89.0": "89",
-        "90.0": "90",
-        "91.0": "91",
-        "92.0": "92",
-        "93.0": "93",
-        "94.0": "94",
-        "96.0": "96",
-        "97.0": "97",
-        "98.0": "98",
-        "99.0": "99"
-      },
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): age at death"
-    },
     "organism": {
       "value": "Homo sapiens",
       "type": "static"
@@ -1985,16 +1464,6 @@
     "tissue_type": {
       "value": "tissue",
       "type": "static"
-    },
-    "region_coarse": {
-      "value": "Cerebral cortex",
-      "type": "static",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): as HMBA brain region (HMBA files LEC/MEC/MTG/V1C under Cerebral cortex, HIP under Hippocampus)"
-    },
-    "dissection": {
-      "value": "STG",
-      "type": "static",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11)"
     },
     "assay": {
       "value": "method",
@@ -2026,7 +1495,7 @@
         "Dementia": "dementia",
         "No dementia": "normal"
       },
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): from Cognitive Status; neuropathology is in AD_status"
+      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): from Cognitive Status; neuropathology is in AD_status (finalize_atlas.py)"
     },
     "disease_ontology_term_id": {
       "value": "Cognitive Status",
@@ -2036,27 +1505,6 @@
         "No dementia": "PATO:0000461"
       }
     },
-    "AD_status": {
-      "value": "Overall AD neuropathological Change",
-      "type": "map",
-      "map": {
-        "High": "Yes",
-        "Intermediate": "Yes",
-        "Low": "No",
-        "Not AD": "No"
-      },
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): ADNC Intermediate/High = Yes (NIA-AA: sufficient explanation for dementia)"
-    },
-    "n_counts": {
-      "value": "Number of UMIs",
-      "type": "column",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11)"
-    },
-    "sample_id": {
-      "value": "library_prep",
-      "type": "column",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): library; the source sample_id is the cell barcode"
-    },
     "cell_type": {
       "value": "Subclass",
       "type": "column",
@@ -2064,11 +1512,6 @@
     }
   },
   "SEAAD_V1C_RNAseq_final-nuclei.2026-06-22": {
-    "study": {
-      "value": "SEA-AD",
-      "type": "static",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11)"
-    },
     "donor_id": {
       "value": "Donor ID",
       "type": "column",
@@ -2091,37 +1534,6 @@
         "Male": "PATO:0000384"
       }
     },
-    "age_years": {
-      "value": "Age at Death",
-      "type": "map",
-      "map": {
-        "100.0": "100",
-        "68.0": "68",
-        "69.0": "69",
-        "70.0": "70",
-        "72.0": "72",
-        "75.0": "75",
-        "78.0": "78",
-        "80.0": "80",
-        "81.0": "81",
-        "82.0": "82",
-        "83.0": "83",
-        "84.0": "84",
-        "87.0": "87",
-        "88.0": "88",
-        "89.0": "89",
-        "90.0": "90",
-        "91.0": "91",
-        "92.0": "92",
-        "93.0": "93",
-        "94.0": "94",
-        "96.0": "96",
-        "97.0": "97",
-        "98.0": "98",
-        "99.0": "99"
-      },
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): age at death"
-    },
     "organism": {
       "value": "Homo sapiens",
       "type": "static"
@@ -2138,16 +1550,6 @@
     "tissue_type": {
       "value": "tissue",
       "type": "static"
-    },
-    "region_coarse": {
-      "value": "Cerebral cortex",
-      "type": "static",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): as HMBA brain region (HMBA files LEC/MEC/MTG/V1C under Cerebral cortex, HIP under Hippocampus)"
-    },
-    "dissection": {
-      "value": "V1C",
-      "type": "static",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11)"
     },
     "assay": {
       "value": "method",
@@ -2181,7 +1583,7 @@
         "Dementia": "dementia",
         "No dementia": "normal"
       },
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): from Cognitive Status; neuropathology is in AD_status"
+      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): from Cognitive Status; neuropathology is in AD_status (finalize_atlas.py)"
     },
     "disease_ontology_term_id": {
       "value": "Cognitive Status",
@@ -2191,27 +1593,6 @@
         "No dementia": "PATO:0000461"
       }
     },
-    "AD_status": {
-      "value": "Overall AD neuropathological Change",
-      "type": "map",
-      "map": {
-        "High": "Yes",
-        "Intermediate": "Yes",
-        "Low": "No",
-        "Not AD": "No"
-      },
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): ADNC Intermediate/High = Yes (NIA-AA: sufficient explanation for dementia)"
-    },
-    "n_counts": {
-      "value": "Number of UMIs",
-      "type": "column",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11)"
-    },
-    "sample_id": {
-      "value": "library_prep",
-      "type": "column",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): library; the source sample_id is the cell barcode"
-    },
     "cell_type": {
       "value": "Subclass",
       "type": "column",
@@ -2219,85 +1600,6 @@
     }
   },
   "37a17b78-4864-4a42-b67b-31c00962795a": {
-    "study": {
-      "value": "PsychAD MSSM",
-      "type": "static",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11)"
-    },
-    "old_index": {
-      "value": "barcodekey",
-      "type": "column",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): cell ID; its prefix <donor>-<library> becomes sample_id in filter_psychad_adult.py"
-    },
-    "age_years": {
-      "value": "development_stage",
-      "type": "map",
-      "map": {
-        "19-year-old stage": "19",
-        "20-year-old stage": "20",
-        "24-year-old stage": "24",
-        "25-year-old stage": "25",
-        "27-year-old stage": "27",
-        "28-year-old stage": "28",
-        "31-year-old stage": "31",
-        "32-year-old stage": "32",
-        "35-year-old stage": "35",
-        "36-year-old stage": "36",
-        "38-year-old stage": "38",
-        "39-year-old stage": "39",
-        "40-year-old stage": "40",
-        "41-year-old stage": "41",
-        "42-year-old stage": "42",
-        "43-year-old stage": "43",
-        "45-year-old stage": "45",
-        "46-year-old stage": "46",
-        "47-year-old stage": "47",
-        "48-year-old stage": "48",
-        "49-year-old stage": "49",
-        "50-year-old stage": "50",
-        "51-year-old stage": "51",
-        "52-year-old stage": "52",
-        "53-year-old stage": "53",
-        "54-year-old stage": "54",
-        "55-year-old stage": "55",
-        "56-year-old stage": "56",
-        "57-year-old stage": "57",
-        "58-year-old stage": "58",
-        "59-year-old stage": "59",
-        "60-year-old stage": "60",
-        "61-year-old stage": "61",
-        "62-year-old stage": "62",
-        "63-year-old stage": "63",
-        "64-year-old stage": "64",
-        "65-year-old stage": "65",
-        "66-year-old stage": "66",
-        "67-year-old stage": "67",
-        "68-year-old stage": "68",
-        "69-year-old stage": "69",
-        "70-year-old stage": "70",
-        "71-year-old stage": "71",
-        "72-year-old stage": "72",
-        "73-year-old stage": "73",
-        "74-year-old stage": "74",
-        "75-year-old stage": "75",
-        "76-year-old stage": "76",
-        "77-year-old stage": "77",
-        "78-year-old stage": "78",
-        "79-year-old stage": "79",
-        "80 year-old and over stage": "80+",
-        "80-year-old stage": "80",
-        "81-year-old stage": "81",
-        "82-year-old stage": "82",
-        "83-year-old stage": "83",
-        "84-year-old stage": "84",
-        "85-year-old stage": "85",
-        "86-year-old stage": "86",
-        "87-year-old stage": "87",
-        "88-year-old stage": "88",
-        "89-year-old stage": "89"
-      },
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): 80 year-old and over -> 80+ (80-89 also appear as single years, so this bin is probably the 90+ HIPAA cap); months -> 0; unknown -> empty"
-    },
     "organism": {
       "value": "Homo sapiens",
       "type": "static"
@@ -2305,130 +1607,9 @@
     "organism_ontology_term_id": {
       "value": "NCBITaxon:9606",
       "type": "static"
-    },
-    "region_coarse": {
-      "value": "Cerebral cortex",
-      "type": "static",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11)"
-    },
-    "dissection": {
-      "value": "DLPFC",
-      "type": "static",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11)"
-    },
-    "PsychAD_class": {
-      "value": "class",
-      "type": "column",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): renamed; HMBA also has a class column"
-    },
-    "PsychAD_subclass": {
-      "value": "subclass",
-      "type": "column",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): renamed; HMBA also has a subclass column"
-    },
-    "PsychAD_subtype": {
-      "value": "subtype",
-      "type": "column",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11)"
     }
   },
   "5c97eeeb-7e52-44b3-b010-b832b1f5424c": {
-    "study": {
-      "value": "PsychAD HBCC",
-      "type": "static",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11)"
-    },
-    "old_index": {
-      "value": "barcodekey",
-      "type": "column",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): cell ID; its prefix <donor>-<library> becomes sample_id in filter_psychad_adult.py"
-    },
-    "age_years": {
-      "value": "development_stage",
-      "type": "map",
-      "map": {
-        "1-month-old stage": "0",
-        "10-year-old stage": "10",
-        "12-year-old stage": "12",
-        "13-year-old stage": "13",
-        "14-year-old stage": "14",
-        "15-year-old stage": "15",
-        "16-year-old stage": "16",
-        "17-year-old stage": "17",
-        "18-year-old stage": "18",
-        "19-year-old stage": "19",
-        "2-month-old stage": "0",
-        "2-year-old stage": "2",
-        "20-year-old stage": "20",
-        "21-year-old stage": "21",
-        "22-year-old stage": "22",
-        "23-year-old stage": "23",
-        "24-year-old stage": "24",
-        "25-year-old stage": "25",
-        "26-year-old stage": "26",
-        "27-year-old stage": "27",
-        "28-year-old stage": "28",
-        "29-year-old stage": "29",
-        "3-month-old stage": "0",
-        "3-year-old stage": "3",
-        "30-year-old stage": "30",
-        "31-year-old stage": "31",
-        "32-year-old stage": "32",
-        "33-year-old stage": "33",
-        "34-year-old stage": "34",
-        "35-year-old stage": "35",
-        "36-year-old stage": "36",
-        "37-year-old stage": "37",
-        "38-year-old stage": "38",
-        "39-year-old stage": "39",
-        "4-month-old stage": "0",
-        "4-year-old stage": "4",
-        "40-year-old stage": "40",
-        "41-year-old stage": "41",
-        "42-year-old stage": "42",
-        "43-year-old stage": "43",
-        "44-year-old stage": "44",
-        "45-year-old stage": "45",
-        "46-year-old stage": "46",
-        "47-year-old stage": "47",
-        "48-year-old stage": "48",
-        "49-year-old stage": "49",
-        "5-year-old stage": "5",
-        "50-year-old stage": "50",
-        "51-year-old stage": "51",
-        "52-year-old stage": "52",
-        "53-year-old stage": "53",
-        "54-year-old stage": "54",
-        "55-year-old stage": "55",
-        "56-year-old stage": "56",
-        "57-year-old stage": "57",
-        "58-year-old stage": "58",
-        "59-year-old stage": "59",
-        "6-month-old stage": "0",
-        "6-year-old stage": "6",
-        "60-year-old stage": "60",
-        "61-year-old stage": "61",
-        "62-year-old stage": "62",
-        "63-year-old stage": "63",
-        "65-year-old stage": "65",
-        "66-year-old stage": "66",
-        "67-year-old stage": "67",
-        "68-year-old stage": "68",
-        "71-year-old stage": "71",
-        "73-year-old stage": "73",
-        "74-year-old stage": "74",
-        "75-year-old stage": "75",
-        "76-year-old stage": "76",
-        "78-year-old stage": "78",
-        "79-year-old stage": "79",
-        "8-year-old stage": "8",
-        "83-year-old stage": "83",
-        "84-year-old stage": "84",
-        "85-year-old stage": "85",
-        "unknown": null
-      },
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): 80 year-old and over -> 80+ (80-89 also appear as single years, so this bin is probably the 90+ HIPAA cap); months -> 0; unknown -> empty"
-    },
     "organism": {
       "value": "Homo sapiens",
       "type": "static"
@@ -2436,79 +1617,9 @@
     "organism_ontology_term_id": {
       "value": "NCBITaxon:9606",
       "type": "static"
-    },
-    "region_coarse": {
-      "value": "Cerebral cortex",
-      "type": "static",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11)"
-    },
-    "dissection": {
-      "value": "DLPFC",
-      "type": "static",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11)"
-    },
-    "PsychAD_class": {
-      "value": "class",
-      "type": "column",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): renamed; HMBA also has a class column"
-    },
-    "PsychAD_subclass": {
-      "value": "subclass",
-      "type": "column",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): renamed; HMBA also has a subclass column"
-    },
-    "PsychAD_subtype": {
-      "value": "subtype",
-      "type": "column",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11)"
     }
   },
   "5e57cd50-8e42-42d6-940d-5c1660d06864": {
-    "study": {
-      "value": "PsychAD RADC",
-      "type": "static",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11)"
-    },
-    "old_index": {
-      "value": "barcodekey",
-      "type": "column",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): cell ID; its prefix <donor>-<library> becomes sample_id in filter_psychad_adult.py"
-    },
-    "age_years": {
-      "value": "development_stage",
-      "type": "map",
-      "map": {
-        "54-year-old stage": "54",
-        "64-year-old stage": "64",
-        "65-year-old stage": "65",
-        "66-year-old stage": "66",
-        "67-year-old stage": "67",
-        "68-year-old stage": "68",
-        "69-year-old stage": "69",
-        "70-year-old stage": "70",
-        "71-year-old stage": "71",
-        "72-year-old stage": "72",
-        "73-year-old stage": "73",
-        "74-year-old stage": "74",
-        "75-year-old stage": "75",
-        "76-year-old stage": "76",
-        "77-year-old stage": "77",
-        "78-year-old stage": "78",
-        "79-year-old stage": "79",
-        "80 year-old and over stage": "80+",
-        "80-year-old stage": "80",
-        "81-year-old stage": "81",
-        "82-year-old stage": "82",
-        "83-year-old stage": "83",
-        "84-year-old stage": "84",
-        "85-year-old stage": "85",
-        "86-year-old stage": "86",
-        "87-year-old stage": "87",
-        "88-year-old stage": "88",
-        "89-year-old stage": "89"
-      },
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): 80 year-old and over -> 80+ (80-89 also appear as single years, so this bin is probably the 90+ HIPAA cap); months -> 0; unknown -> empty"
-    },
     "organism": {
       "value": "Homo sapiens",
       "type": "static"
@@ -2516,31 +1627,6 @@
     "organism_ontology_term_id": {
       "value": "NCBITaxon:9606",
       "type": "static"
-    },
-    "region_coarse": {
-      "value": "Cerebral cortex",
-      "type": "static",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11)"
-    },
-    "dissection": {
-      "value": "DLPFC",
-      "type": "static",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11)"
-    },
-    "PsychAD_class": {
-      "value": "class",
-      "type": "column",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): renamed; HMBA also has a class column"
-    },
-    "PsychAD_subclass": {
-      "value": "subclass",
-      "type": "column",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11): renamed; HMBA also has a subclass column"
-    },
-    "PsychAD_subtype": {
-      "value": "subtype",
-      "type": "column",
-      "note": "HMBA_SEAAD_PsychAD atlas (2026-11)"
     }
   }
 }
