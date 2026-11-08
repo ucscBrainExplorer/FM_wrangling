@@ -328,6 +328,23 @@
       "value": "",
       "type": "static"
     },
+    "age": {
+      "type": "map",
+      "value": "age",
+      "map": {
+        "18.0": "18 yrs",
+        "19.0": "19 yrs",
+        "25.0": "25 yrs",
+        "38.0": "38 yrs",
+        "44.0": "44 yrs",
+        "50.0": "50 yrs",
+        "57.0": "57 yrs",
+        "58.0": "58 yrs",
+        "60.0": "60 yrs",
+        "61.0": "61 yrs"
+      },
+      "note": "source age has no unit for the HMBA cells (years); the Siletti cells already read 'N yrs' and pass through"
+    },
     "collection_doi_label": "Human and Mammalian Brain Atlas v0.5",
     "dataset_title": "WB_HMBA_Human_AIT",
     "assay": {
@@ -369,6 +386,20 @@
       "value": "",
       "type": "static"
     },
+    "age": {
+      "type": "map",
+      "value": "age",
+      "map": {
+        "5.0": "5 yrs",
+        "6.0": "6 yrs",
+        "7.0": "7 yrs",
+        "9.0": "9 yrs",
+        "10.0": "10 yrs",
+        "11.0": "11 yrs",
+        "14.0": "14 yrs"
+      },
+      "note": "source age has no unit; years (adult animals)"
+    },
     "collection_doi_label": "Human and Mammalian Brain Atlas v0.5",
     "dataset_title": "WB_HMBA_Macaque_AIT"
   },
@@ -392,6 +423,18 @@
     "development_stage_ontology_term_id": {
       "value": "",
       "type": "static"
+    },
+    "age": {
+      "type": "map",
+      "value": "age",
+      "map": {
+        "2.0": "2 yrs",
+        "4.0": "4 yrs",
+        "5.4": "5.4 yrs",
+        "6.6": "6.6 yrs",
+        "7.4": "7.4 yrs"
+      },
+      "note": "source age has no unit; years (adult animals)"
     },
     "collection_doi_label": "Human and Mammalian Brain Atlas v0.5",
     "dataset_title": "WB_HMBA_marmoset_AIT"

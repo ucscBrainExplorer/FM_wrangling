@@ -18,6 +18,10 @@ parser.add_argument("--metadata_file", default="obs.tsv.gz",
                     help="Obs file inside --data_dir to annotate (default: obs.tsv.gz), e.g. a copy with harmonized label columns added")
 parser.add_argument("--output_dir", default=None,
                     help="Where to write the outputs (default: --data_dir); use a scratch dir to compare a re-run")
+parser.add_argument("--cell_label", default=None,
+                    help="Obs column counted as the cell types in metadata_summary.json (default: the first of "
+                         "CELL_LABEL_PRIORITY in cell_label.py). Use the column pinned first in the pyramid "
+                         "(buildPyramidConfig.py --pinned), so the site summary and the map agree.")
 args = parser.parse_args()
 
 import pandas as pd
@@ -320,6 +324,9 @@ else:
                     meta_data[new_column] = None
 
                 src = meta_data.loc[mask, source_col]
+                # obs is read without dtype=str, so a column can hold floats (2.0) in some parse chunks; map keys
+                # are strings ("2.0"), as combineEmbedding.py reads them, so match on the string form
+                src = src.map(lambda v: v if pd.isna(v) or isinstance(v, str) else str(v))
                 hit = src.isin(value_map.keys())
                 unmapped = sorted(str(v) for v in src[~hit & src.notna()].unique())
                 translated = src.map(value_map).where(hit, src)
@@ -865,7 +872,14 @@ summary["normalized_age_bucket_ontology_term_id"] = normalized_age_bucket_ontolo
 
 # cell_type and cell_type_ontology_term_id, from the main cell label column (priority list in cell_label.py,
 # shared with buildPyramidConfig.py)
-cell_label = pick_cell_label(meta_data)
+if args.cell_label:
+    if args.cell_label not in meta_data.columns:
+        sys.exit(f"ERROR: --cell_label column '{args.cell_label}' is not in obs")
+    cell_label = args.cell_label
+else:
+    cell_label = pick_cell_label(meta_data)
+print(f"cell label for the cell_type counts: '{cell_label}'"
+      + (" (--cell_label)" if args.cell_label else " (automatic, cell_label.py)"))
 if cell_label is None:
     sys.exit("ERROR: no cell label column in obs (see CELL_LABEL_PRIORITY in cell_label.py)")
 summary["cell_type"] = getUniqueLabelCounts(meta_data, cell_label)

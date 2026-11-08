@@ -328,6 +328,10 @@ python3 $FMW/annotate_obs.py --data_dir <ATLAS_DIR>
   `/public/groups/hausslerlab/people/<login>/.env`, readable only by you (`chmod 600`), never in the shared folder or
   inside the clone. The two mappings are printed for checking.
 - Keeps the hand-filled fields of an existing `metadata_summary.json` (`reference_name`, `reference_uuid`, `version_label`, `reference_pyramid`, `foundation_model`, `abstract`); everything else is regenerated.
+- `--cell_label <column>` sets the column whose labels are counted as the cell types in `metadata_summary.json`.
+  Give the same column you pin first in the pyramid (`buildPyramidConfig.py --pinned`), so the site summary and the
+  map agree. Without it, the first of `CELL_LABEL_PRIORITY` in `cell_label.py` is used, and the log says which.
+  Example: `--cell_label concensus_subclass` for an HMBA atlas.
 - `--output_dir <DIR>` writes the outputs elsewhere (still reading the hand-filled fields from `<ATLAS_DIR>`), to compare a re-run before replacing the files.
 
 ## Step 5 — Build pyramid
@@ -347,8 +351,10 @@ the unannotated `obs.tsv.gz`. The file name is saved in the config, so `buildPyr
 This auto-generates `<ATLAS_DIR>/pyramid_e{N}_config.json` listing the obs columns to show, in this order:
 
 1. **The cell label, pinned first:** the first of `harmonized_subclass`, `harmonized_cell_type`,
-   `harmonized_cell_label`, `mapped_cell_label`, `custom_cell_type`, `subclass` (only if it covers more cells than
-   `cell_type`), `cell_type` present in the obs. The list is `CELL_LABEL_PRIORITY` in `cell_label.py`, which
+   `harmonized_cell_label`, `mapped_cell_label`, `concensus_subclass` (HMBA's cross-species subclass; only if it
+   covers at least 90% of the cells `cell_type` covers, so not in a cohort where only the HMBA datasets have it),
+   `custom_cell_type`,
+   `subclass` (only if it covers more cells than `cell_type`), `cell_type` present in the obs. The list is `CELL_LABEL_PRIORITY` in `cell_label.py`, which
    `annotate_obs.py` also uses for the cell-type counts in `metadata_summary.json`, so the map and the site's summary
    use the same column. Check which one was picked in the printed summary; `--pinned <column>` overrides it.
    `--pinned` also takes a comma-separated list, pinned first in that order, the first being the cell label: for
