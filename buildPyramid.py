@@ -92,13 +92,13 @@ def findCodes(data, feature, order="alphabetical"):
         classes = sorted(counts.index, key=lambda c: (-counts[c], str(c)))
         categories_int = pd.Categorical(data[feature], categories=classes).codes.astype(int) + 1
     else:
-        from sklearn.preprocessing import LabelEncoder
-        categories = data[feature].to_numpy()
-        le = LabelEncoder()
-        mask = ~pd.isna(categories)
-        categories_int = np.zeros_like(categories, dtype=int)
-        categories_int[mask] = le.fit_transform(categories[mask]) + 1
-        classes = le.classes_
+        # Alphabetical ignoring case (as map_newdata.py and buildPyramidConfig.py's column order); numbers numerically.
+        values = pd.unique(data[feature].dropna())
+        if all(isinstance(c, (int, float, np.number)) and not isinstance(c, bool) for c in values):
+            classes = sorted(values)
+        else:
+            classes = sorted(values, key=lambda c: (str(c).casefold(), str(c)))
+        categories_int = pd.Categorical(data[feature], categories=classes).codes.astype(int) + 1   # NaN -> 0
     cat_list = ["background"] + [str(int(c)) if isinstance(c, float) and c.is_integer() else str(c) for c in classes]
     print(f"  {len(classes)} categories ({order} order)")
     return categories_int, cat_list

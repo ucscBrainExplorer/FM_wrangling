@@ -431,17 +431,27 @@ Copy the notes the site shows into `wrangling_notes/<reference_uuid>/` in your d
 
 ## View mapped query data — `map_newdata.py`
 
-The Arrow file from `map_newdata.py --out <name>.arrow` shows as an overlay on the reference: upload it anywhere
-public (e.g. `s3://latentbrain/<ATLAS_DIR>/`) and add `&overlay=` to the viewer URL:
+The Arrow file from `map_newdata.py --out <name>.arrow` shows as an overlay on the reference. Upload it into a
+`query/` folder inside the reference's pyramid folder, and add `&overlay=` to the viewer URL:
+```bash
+aws s3 cp <ATLAS_DIR>/query/<name>.arrow s3://latentbrainpyramid/<ATLAS_DIR>_<reference_uuid>/query/<name>.arrow
+```
+The overlay's coordinates come from the PUMAP that pyramid was drawn from, so it belongs with that pyramid; a new
+PUMAP means a new pyramid, and the overlay has to be made again. Re-uploading the pyramid (`aws s3 sync`, without
+`--delete`) leaves the `query/` folder in place.
+Not `s3://latentbrain/`: the viewer cannot read that bucket (403). The pyramid bucket serves only requests coming
+from the brainexplorer site, so opening the file's URL directly also gives 403; to check an upload, send the site as
+Referer: `curl -sI -H "Referer: https://brainexplorer.ucsc.edu/" <arrow_url> | head -1` should print `200 OK`.
 ```
 {browser}/pyramid/?image={pyramid_url}&overlay={arrow_url}
 ```
 - `{browser}`: `https://brainexplorer.ucsc.edu`, or `https://dev.brainexplorer.ucsc.edu` for the dev site
 - `{pyramid_url}`: the reference pyramid's public URL (Step 5, Upload and view)
-- `{arrow_url}`: the Arrow file's public URL, e.g. `https://latentbrain.s3.us-east-1.amazonaws.com/<ATLAS_DIR>/<name>.arrow`
+- `{arrow_url}`: the Arrow file's URL, `https://latentbrainpyramid.s3.amazonaws.com/<ATLAS_DIR>_<reference_uuid>/query/<name>.arrow`
 
-For example, `image=https://tmpsinglecell.xenahubs.net/download/UCE/Wang2025Nature` with
-`overlay=https://latentbrain.s3.us-east-1.amazonaws.com/Wang2025Nature/<arrow_file>`.
+For example, the Phan 2024 striatum (c893ddc3) on HMBA v0.5:
+`image=https://latentbrainpyramid.s3.amazonaws.com/HMBAv0.5_ucebrain768bicans2048_shuffle_b62573e1-2880-45ca-833c-89fa61e751e2`
+with `overlay=https://latentbrainpyramid.s3.amazonaws.com/HMBAv0.5_ucebrain768bicans2048_shuffle_b62573e1-2880-45ca-833c-89fa61e751e2/query/c893ddc3-f25b-45e2-8c9e-155918b4261c.arrow`.
 
 ---
 

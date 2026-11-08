@@ -209,7 +209,7 @@ if "sample_label" in eligible:
 if pinned:
     ordered_cols.append(pinned)
 ordered_cols += pinned_extra
-ordered_cols += sorted([c for c in eligible if c != "sample_label"])
+ordered_cols += sorted([c for c in eligible if c != "sample_label"], key=lambda c: (c.casefold(), c))  # as buildPyramidConfig.py
 
 cat_cols = {}
 for col in ordered_cols:
@@ -225,7 +225,7 @@ for col in ordered_cols:
         if col in ref_cats:
             cats = ref_cats[col]
             present = set(str_series)
-            extra = sorted(present - set(cats))   # labels absent from the reference go last
+            extra = sorted(present - set(cats), key=lambda c: (c.casefold(), c))   # labels absent from the reference go last
             # The viewer fails on zero-count categories. Trailing unused reference labels
             # can be dropped without shifting codes; mid-list ones cannot.
             while cats and cats[-1] not in present:
@@ -238,7 +238,8 @@ for col in ordered_cols:
             print(f"  category   {col}: {series.nunique()} unique, reference order"
                   + (f", extra {extra}" if extra else ""))
         else:
-            cat_cols[col] = pa.array(str_series.astype("category"))
+            labels = sorted(str_series.unique(), key=lambda c: (c.casefold(), c))   # alphabetical, ignoring case
+            cat_cols[col] = pa.array(pd.Categorical(str_series, categories=labels))
             print(f"  category   {col}: {series.nunique()} unique")
 
 # ── write arrow file ──────────────────────────────────────────────────────────
