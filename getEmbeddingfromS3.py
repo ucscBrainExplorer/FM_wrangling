@@ -207,9 +207,22 @@ class S3File(io.RawIOBase):
         n = min(len(b), self.size - self.pos)
         if n <= 0:
             return 0
-        data = self.s3.get_object(
-            Bucket=self.bucket, Key=self.key, Range=f"bytes={self.pos}-{self.pos + n - 1}"
-        )["Body"].read()
+        # A dropped connection mid-read (IncompleteRead / ResponseStreamingError) once killed a 5-hour download
+        # (2026-11-09); retry the same range a few times before giving up.
+        for attempt in range(5):
+            try:
+                data = self.s3.get_object(
+                    Bucket=self.bucket, Key=self.key, Range=f"bytes={self.pos}-{self.pos + n - 1}"
+                )["Body"].read()
+                if len(data) == n:
+                    break
+                raise IOError(f"short read: {len(data)} of {n} bytes")
+            except Exception as e:
+                if attempt == 4:
+                    raise
+                print(f"  S3 read of {self.key} bytes {self.pos}+{n} failed ({type(e).__name__}: {e}); "
+                      f"retry {attempt + 1}/4", flush=True)
+                time.sleep(5 * (attempt + 1))
         b[:len(data)] = data
         self.pos += len(data)
         return len(data)
