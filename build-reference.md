@@ -74,8 +74,10 @@ come from and which local folders hold them:
 **S3 access.** `s3://latentbrain/<ATLAS_DIR>/` needs no setup: S3 has no real folders, so the first
 `aws s3 cp <file> s3://latentbrain/<ATLAS_DIR>/` creates it (`aws s3 ls s3://latentbrain/<ATLAS_DIR>/` lists it). The
 `aws` commands on courtyard need your own AWS key (ask Jing; enter it with `aws configure`, never in code or chat).
-Keys can list, read and upload but not delete: ask Jing to delete files in S3. The NRP Jobs and pods use their own
-key from the `latentbrain-aws-creds` secret.
+The courtyard key (`courtyard_s3`, policy of 2026-11-09) can list, read and upload in `latentbrain`,
+`latentbrainpyramid` and `ucsc-h5ad`, but delete only in `latentbrain`; in `ucsc-brainexplorer` it can read
+everything and upload only into atlas folders (`*_shuffle_*/`). Ask Jing to delete files elsewhere. An upload of a
+file with an existing name replaces it. The NRP Jobs and pods use their own key from the `latentbrain-aws-creds` secret.
 
 ---
 
@@ -334,6 +336,19 @@ python3 $FMW/annotate_obs.py --data_dir <ATLAS_DIR>
   Example: `--cell_label concensus_subclass` for an HMBA atlas.
 - `--output_dir <DIR>` writes the outputs elsewhere (still reading the hand-filled fields from `<ATLAS_DIR>`), to compare a re-run before replacing the files.
 
+**Which wrangling notes file is the final one.** `wrangling_notes_annotation.txt` is the final notes, the file the
+site shows ([Step 6](#step-6--add-the-reference-to-data-explorer--merge_metadata_summarypy) copies it as
+`wrangling_notes.txt`). `annotate_obs.py` builds it on every run from two inputs, in this order:
+
+| File | Written by | In the final notes |
+|---|---|---|
+| `wrangling_notes_combineEmbedding.txt` | `combineEmbedding.py` | first: sources, cell filters, rules applied at combine |
+| (the annotation step itself) | `annotate_obs.py` | next: rules applied, OpenAI mappings, the cell label column |
+| `wrangling_notes_custom.txt` (optional) | you, or an atlas script (e.g. `finalize_atlas.py`) | last, as written |
+
+Edit `wrangling_notes_custom.txt` to add to the notes (e.g. what the cell label is, that a batch or species
+correction is for the map only), never `wrangling_notes_annotation.txt`: the next run overwrites it.
+
 ## Step 5 — Build pyramid
 
 ### Generate pyramid config
@@ -428,6 +443,32 @@ python3 $FMW/merge_metadata_summary.py /public/groups/hausslerlab/people/$USER/d
 Copy the notes the site shows into `wrangling_notes/<reference_uuid>/` in your data-explorer clone:
 - `<ATLAS_DIR>/wrangling_notes_annotation.txt` → `wrangling_notes.txt`
 - `system_prompt_normalized_age_bucket.txt` and `system_prompt_normalized_organism.txt`
+
+### Production mapping files — `s3://ucsc-brainexplorer/<ATLAS_DIR>_<reference_uuid>/`
+
+The site's mapping backend reads each production reference from its own folder in `s3://ucsc-brainexplorer/`, named
+like the pyramid folder (decided 2026-11-09). Six files, with fixed names:
+
+| File | From `<ATLAS_DIR>/` |
+|---|---|
+| `transform.json` | `transform_<...>.json` with `pumap_model_file`, `pca_model_file`, `d_hat` set to the names below |
+| `ipca_model.pkl` | `ipca_model.pkl` |
+| `d_hat.npy` | the correction directions of the map (e.g. `species_dirs_k8.npy`); omit `d_hat` from `transform.json` if none |
+| `pumap_model.pkl` | `pytorch_<...>.pkl` |
+| `index.faiss` | `index.faiss` from `s3://latentbrain/<ATLAS_DIR>/` (the KNN Job writes it), on the **uncorrected** embedding |
+| `prediction_obs.tsv.gz` | the label columns to predict, one row per reference cell in `index.faiss` order, no index column |
+
+`prediction_obs.tsv.gz` is the reference TSV of `predict.py` (FoundationModelBenchmarking): every column is predicted
+except those ending in `_term_id`, in column order, and an empty label counts as `missing_label`. Its row count must
+equal `index.ntotal`. Stage the six files in `<ATLAS_DIR>/production/`, check that `transform.json` with only those
+files reproduces `umap_*.npy` on a few thousand rows of `uce.h5`, then upload each and compare sizes:
+```bash
+D=s3://ucsc-brainexplorer/<ATLAS_DIR>_<reference_uuid>
+for f in transform.json ipca_model.pkl d_hat.npy pumap_model.pkl prediction_obs.tsv.gz index.faiss; do
+    aws s3 cp --no-progress <ATLAS_DIR>/production/$f $D/$f; done
+aws s3 ls $D/
+```
+First reference done this way: HMBA v0.5 (`concensus_class`, `concensus_subclass`).
 
 ## View mapped query data — `map_newdata.py`
 
