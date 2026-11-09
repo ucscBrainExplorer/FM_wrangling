@@ -232,8 +232,13 @@ for col in ordered_cols:
                 cats = cats[:-1]
             unused = [c for c in cats if c not in present]
             if unused:
-                print(f"  WARNING {col}: reference labels with 0 cells kept to preserve codes "
-                      f"(viewer may fail to display): {unused}")
+                # Mid-list labels with 0 cells would make the viewer show a white page, so this
+                # column gets its own alphabetical order; its colors then don't match the reference.
+                labels = sorted(present, key=lambda c: (c.casefold(), c))
+                cat_cols[col] = pa.array(pd.Categorical(str_series, categories=labels))
+                print(f"  category   {col}: {series.nunique()} unique, own order: {len(unused)} reference "
+                      f"labels have 0 cells, so colors won't match the reference")
+                continue
             cat_cols[col] = pa.array(pd.Categorical(str_series, categories=cats + extra))
             print(f"  category   {col}: {series.nunique()} unique, reference order"
                   + (f", extra {extra}" if extra else ""))
