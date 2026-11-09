@@ -1,0 +1,78 @@
+# CPU-only JupyterLab for the PUMAP notebooks: transforming with a trained
+# pytorch*_e*.pkl and plotting need no GPU, and a CPU pod schedules right away
+# when GPUs are busy. Same image, packages, PVC and S3 credentials as
+# jupyter-pumap-job.yaml; training still needs that GPU Job.
+#
+# In 3_trainPUMAPmodel.ipynb, set results_dir, run_tag and existing_model_iteration
+# to the trained model, skip the training cells (fit/save) and run the load-model,
+# transform and plot cells.
+#
+#   sed s/USERNAME/chris/g k8s/jupyter-pumap-cpu-job.yaml | kubectl apply -f -
+#   kubectl logs -n braingeneers -f job/jupyter-pumap-cpu-chris      # wait for the token
+#   kubectl port-forward -n braingeneers job/jupyter-pumap-cpu-chris 8888:8888
+#   open http://localhost:8888 and paste the token
+#
+# Delete the Job when done (files on the PVC stay):
+#   kubectl delete job -n braingeneers jupyter-pumap-cpu-chris
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: jupyter-pumap-cpu-USERNAME
+  namespace: braingeneers
+spec:
+  backoffLimit: 2
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: jupyter
+          image: python:3.9.23-slim
+          env:
+            - name: PIP_CACHE_DIR
+              value: /mnt/pvc/.pip-cache
+            - name: S3DIR_ROOT
+              value: /mnt/pvc
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: latentbrain-aws-creds
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: latentbrain-aws-creds
+                  key: AWS_SECRET_ACCESS_KEY
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -e
+              DEBIAN_FRONTEND=noninteractive apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq git > /dev/null
+              # Same torch build as the GPU Job (it runs on CPU too) and already in the PVC pip cache
+              pip install -q torch==2.8.0+cu126 --extra-index-url https://download.pytorch.org/whl/cu126
+              REPO=/work/FM_wrangling
+              git clone -q --depth 1 https://github.com/ucscBrainExplorer/FM_wrangling.git "$REPO"
+              git -C "$REPO" log -1 --format="FM_wrangling %h %s"
+              pip install -q -r "$REPO/requirements_pumap.txt" awscli
+              TOKEN=$(python -c "import secrets; print(secrets.token_hex(24))")
+              echo "=============================================="
+              echo "Jupyter token: ${TOKEN}"
+              echo "=============================================="
+              jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root \
+                --ServerApp.token="${TOKEN}" --notebook-dir="$REPO"
+          volumeMounts:
+            - name: shared-data
+              mountPath: /mnt/pvc
+              subPath: pumap
+          # 22M cells x 50 PCs is ~4.4 GB in the kernel, plus obs and plots; the
+          # transform runs on these CPUs (a few minutes for 22M cells)
+          resources:
+            requests:
+              cpu: 4
+              memory: 32Gi
+            limits:
+              cpu: 4800m
+              memory: 32Gi
+      volumes:
+        - name: shared-data
+          persistentVolumeClaim:
+            claimName: uce-pvc
