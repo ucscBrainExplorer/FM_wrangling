@@ -765,7 +765,7 @@ if (~is_human).any():
     print(note)
 
 # Step 2: normalized_age_bucket_summary
-mapped_buckets = cell_age_bucket
+mapped_buckets = as_unknown(pd.Series(cell_age_bucket))
 
 # Count occurrences
 counts = mapped_buckets.value_counts().rename_axis("label").reset_index(name="count")
@@ -800,27 +800,41 @@ normalized_age_bucket_summary = (
 )
 
 # Step 3: normalized_age_bucket_ontology_term_id_summary
-mapped_buckets = cell_age_term
+mapped_buckets = as_unknown(pd.Series(cell_age_term))
 
 # Count occurrences
-counts = mapped_buckets.value_counts().rename_axis("label").reset_index(name="count")
+counts = mapped_buckets.value_counts().rename_axis("label").reset_index(name="cell_count")
 
-# Convert to list-of-dicts for JSON summary
-normalized_age_bucket_ontology_term_id_summary = counts.dropna(subset=["label"]).to_dict(orient="records")
+# Convert to list-of-dicts for JSON summary (key cell_count, like every other list; it was "count" before 2026-11-09)
+normalized_age_bucket_ontology_term_id_summary = counts.to_dict(orient="records")
 
 # Save system prompt to file
 with open(system_prompt_file_normalized_age_bucket, "w") as f:
     f.write(system_prompt)
 
 # ---------- generate reference data summary json ----------
+# Values that mean "no information" are counted together as one label, "unknown" (CELLxGENE's term), so that
+# every list in the summary adds up to cell_number and the site shows the missing share instead of hiding it
+# (value_counts drops NaN, and "", "NA", "Unknown or unreported" ... would otherwise each be a label of their own).
+# Values with a meaning, such as "Not Evaluated", are kept.
+UNKNOWN_LABEL = "unknown"
+UNKNOWN_VALUES = {"", "nan", "na", "n/a", "none", "null", "unknown", "unreported", "not reported",
+                  "unknown or unreported"}
+
+def as_unknown(series):
+    """Series with NaN and the UNKNOWN_VALUES (any case, outer spaces ignored) replaced by UNKNOWN_LABEL."""
+    s = series.astype(object)
+    missing = s.isna() | s.astype(str).str.strip().str.lower().isin(UNKNOWN_VALUES)
+    return s.where(~missing, UNKNOWN_LABEL)
+
 def getUniqueLabelCounts(meta_data, column):
-    counts = meta_data[column].value_counts().to_dict()
+    counts = as_unknown(meta_data[column]).value_counts().to_dict()
     labelCounts = [
         {
-            "label": column,
-            "cell_count": count,
+            "label": label,
+            "cell_count": int(count),
         }
-        for column, count in counts.items()
+        for label, count in counts.items()
     ]
     return labelCounts
 
