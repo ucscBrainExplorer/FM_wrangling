@@ -686,6 +686,20 @@ Do not include explanations or commentary.
 
 """
 
+# Values that mean "no information" are counted together as one label, "unknown" (CELLxGENE's term), so that
+# every list in the summary adds up to cell_number and the site shows the missing share instead of hiding it
+# (value_counts drops NaN, and "", "NA", "Unknown or unreported" ... would otherwise each be a label of their own).
+# Values with a meaning, such as "Not Evaluated", are kept.
+UNKNOWN_LABEL = "unknown"
+UNKNOWN_VALUES = {"", "nan", "na", "n/a", "none", "null", "unknown", "unreported", "not reported",
+                  "unknown or unreported"}
+
+def as_unknown(series):
+    """Series with NaN and the UNKNOWN_VALUES (any case, outer spaces ignored) replaced by UNKNOWN_LABEL."""
+    s = series.astype(object)
+    missing = s.isna() | s.astype(str).str.strip().str.lower().isin(UNKNOWN_VALUES)
+    return s.where(~missing, UNKNOWN_LABEL)
+
 # Step 1:
 is_human = meta_data["normalized_organism"].eq("Homo sapiens")
 stage_group_cols = [c for c in ["development_stage_ontology_term_id", "development_stage"]
@@ -813,20 +827,6 @@ with open(system_prompt_file_normalized_age_bucket, "w") as f:
     f.write(system_prompt)
 
 # ---------- generate reference data summary json ----------
-# Values that mean "no information" are counted together as one label, "unknown" (CELLxGENE's term), so that
-# every list in the summary adds up to cell_number and the site shows the missing share instead of hiding it
-# (value_counts drops NaN, and "", "NA", "Unknown or unreported" ... would otherwise each be a label of their own).
-# Values with a meaning, such as "Not Evaluated", are kept.
-UNKNOWN_LABEL = "unknown"
-UNKNOWN_VALUES = {"", "nan", "na", "n/a", "none", "null", "unknown", "unreported", "not reported",
-                  "unknown or unreported"}
-
-def as_unknown(series):
-    """Series with NaN and the UNKNOWN_VALUES (any case, outer spaces ignored) replaced by UNKNOWN_LABEL."""
-    s = series.astype(object)
-    missing = s.isna() | s.astype(str).str.strip().str.lower().isin(UNKNOWN_VALUES)
-    return s.where(~missing, UNKNOWN_LABEL)
-
 def getUniqueLabelCounts(meta_data, column):
     counts = as_unknown(meta_data[column]).value_counts().to_dict()
     labelCounts = [
