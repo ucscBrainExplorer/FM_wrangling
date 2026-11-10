@@ -452,9 +452,9 @@ like the pyramid folder (decided 2026-11-09). Six files, with fixed names:
 
 | File | From `<ATLAS_DIR>/` |
 |---|---|
-| `transform.json` | `transform_<...>.json` with `pumap_model_file`, `pca_model_file`, `d_hat` set to the names below |
+| `transform.json` | `transform_<...>.json` with `pumap_model_file`, `pca_model_file`, `d_hat` set to the names below (add `"d_hat": "d_hat.npy"` when the PUMAP run's transform has none) |
 | `ipca_model.pkl` | `ipca_model.pkl` |
-| `d_hat.npy` | the correction directions of the map (e.g. `species_dirs_k8.npy`); omit `d_hat` from `transform.json` if none |
+| `d_hat.npy` | the correction directions of the map (e.g. `species_dirs_k8.npy`). The backend requires one: with no correction, copy `no_correction/d_hat.npy` from this repo, zeros of shape (1, 50) that remove nothing (for the 50-component PCA) |
 | `pumap_model.pkl` | `pytorch_<...>.pkl` |
 | `index.faiss` | `index.faiss` from `s3://latentbrain/<ATLAS_DIR>/` (the KNN Job writes it), on the **uncorrected** embedding |
 | `prediction_obs.tsv.gz` | the label columns to predict, one row per reference cell in `index.faiss` order, no index column |
