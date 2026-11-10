@@ -578,6 +578,23 @@
       "value": "tissue",
       "type": "static"
     },
+    "disease": {
+      "value": "normal",
+      "type": "static"
+    },
+    "disease_ontology_term_id": {
+      "value": "PATO:0000461",
+      "type": "static"
+    },
+    "development_stage": {
+      "value": "adult",
+      "type": "static",
+      "note": "Allen WMB donors are adult mice, P51-P71 (ABC Atlas donor.csv)"
+    },
+    "development_stage_ontology_term_id": {
+      "value": "UBERON:0000113",
+      "type": "static"
+    },
     "collection_doi_label": "Yao et al. (2023) Nature",
     "dataset_title": "Allen whole mouse brain 10x v2"
   },
@@ -628,6 +645,23 @@
     },
     "tissue_type": {
       "value": "tissue",
+      "type": "static"
+    },
+    "disease": {
+      "value": "normal",
+      "type": "static"
+    },
+    "disease_ontology_term_id": {
+      "value": "PATO:0000461",
+      "type": "static"
+    },
+    "development_stage": {
+      "value": "adult",
+      "type": "static",
+      "note": "Allen WMB donors are adult mice, P51-P71 (ABC Atlas donor.csv)"
+    },
+    "development_stage_ontology_term_id": {
+      "value": "UBERON:0000113",
       "type": "static"
     },
     "collection_doi_label": "Yao et al. (2023) Nature",
