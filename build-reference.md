@@ -268,12 +268,16 @@ cell 2:
 ```python
 results_dir = "s3://latentbrain/<ATLAS_DIR>/"
 embedding_h5_file = "pca.h5"
-knn_outfile = "knn_30_ivfflat.npz"
+knn_outfile = "knn_30_ivfpq_256.npz"   # the KNN Job output: knn_30_<KNN_INDEX>.npz
 existing_model_iteration = 0   # 0 = start fresh; N = resume from pytorch{tag}_eN.pkl
 epochs = 10                    # epochs to train (or add) in this run
 k = 10                         # KNN neighbors used for PUMAP (subset of knn_30)
 run_tag = ""                   # goes into every output name; use a new one for each try
+d_hat_file = None              # None = no batch correction; only with a corrected PCA, its directions file
 ```
+Leave `d_hat_file = None` unless `embedding_h5_file` is a batch-corrected PCA (e.g. `pca_corrected_species_k8.h5`
+with `species_dirs_k8.npy`): whatever it names goes into `transform_e{N}.json` as `"d_hat"`, and the site would remove
+those directions from query cells.
 
 The notebook trains PUMAP on the PCA-transformed embeddings using the precomputed KNN. Training is incremental — run multiple times to add epochs, saving a checkpoint each time (`pytorch_e{total}.pkl`). After training it transforms all cells and auto-detects if axes need swapping (width > height).
 
@@ -417,7 +421,9 @@ Output: PNG tiles for each feature + `metadata.json` in `target_dir`. The tile c
 
 ### Upload and view
 
-Upload `target_dir` to a new folder in the pyramid bucket, named `<ATLAS_DIR>_<reference_uuid>`. The top level of the
+Upload `target_dir` to a new folder in the pyramid bucket, named `<ATLAS_DIR>_<reference_uuid>`, where
+`<reference_uuid>` is the uuid in `metadata_summary.json` (a real uuid, e.g. `90ddcc23-ad70-3b58-a7bf-05370939cf0c`,
+not a date or a short name; the production mapping folder and data-explorer use the same one). The top level of the
 bucket is for production atlases (the ones data-explorer shows); put experimental ones under `experimental/`, and copy
 one to the top level only when it becomes production. `<PREFIX>` below is `experimental/` or empty:
 ```bash
@@ -447,29 +453,65 @@ Copy the notes the site shows into `wrangling_notes/<reference_uuid>/` in your d
 
 ### Production mapping files — `s3://ucsc-brainexplorer/<ATLAS_DIR>_<reference_uuid>/`
 
-The site's mapping backend reads each production reference from its own folder in `s3://ucsc-brainexplorer/`, named
-like the pyramid folder (decided 2026-11-09). Six files, with fixed names:
+The site's mapping backend (which places a user's cells on the map and predicts their labels) reads each production
+reference from its own folder in `s3://ucsc-brainexplorer/`, named like the pyramid folder (decided 2026-11-09).
+The folder holds exactly six files with **fixed names**; the backend does not look for any other name (not
+`pytorch_e5.pkl`, not `transform_e5.json`).
 
-| File | From `<ATLAS_DIR>/` |
+| File in `production/` | Made from |
 |---|---|
-| `transform.json` | `transform_<...>.json` with `pumap_model_file`, `pca_model_file`, `d_hat` set to the names below (add `"d_hat": "d_hat.npy"` when the PUMAP run's transform has none) |
-| `ipca_model.pkl` | `ipca_model.pkl` |
-| `d_hat.npy` | the correction directions of the map (e.g. `species_dirs_k8.npy`). The backend requires one: with no correction, copy `no_correction/d_hat.npy` from this repo, zeros of shape (1, 50) that remove nothing (for the 50-component PCA) |
-| `pumap_model.pkl` | `pytorch_<...>.pkl` |
-| `index.faiss` | `index.faiss` from `s3://latentbrain/<ATLAS_DIR>/` (the KNN Job writes it), on the **uncorrected** embedding |
-| `prediction_obs.tsv.gz` | the label columns to predict, one row per reference cell in `index.faiss` order, no index column |
+| `transform.json` | your PUMAP run's `transform_<...>.json`, with three fields changed: `"pumap_model_file": "pumap_model.pkl"`, `"pca_model_file": "ipca_model.pkl"`, `"d_hat": "d_hat.npy"` |
+| `pumap_model.pkl` | that run's `pytorch_<...>.pkl` |
+| `ipca_model.pkl` | `ipca_model.pkl` (Step 2) |
+| `d_hat.npy` | **no batch correction (the usual case):** `no_correction/d_hat.npy` from this repo (zeros of shape (1, 50) that remove nothing; the backend needs the file even then). **With a correction:** the directions the map was trained with, e.g. `species_dirs_k8.npy` |
+| `index.faiss` | `index.faiss` from `s3://latentbrain/<ATLAS_DIR>/` (the KNN Job writes it; built on the uncorrected embedding) |
+| `prediction_obs.tsv.gz` | the cell type columns to predict, one row per reference cell in `uce.h5` / `obs.tsv.gz` order (= `index.faiss` order), no index column |
 
-`prediction_obs.tsv.gz` is the reference TSV of `predict.py` (FoundationModelBenchmarking): every column is predicted
-except those ending in `_term_id`, in column order, and an empty label counts as `missing_label`. Its row count must
-equal `index.ntotal`. Stage the six files in `<ATLAS_DIR>/production/`, check that `transform.json` with only those
-files reproduces `umap_*.npy` on a few thousand rows of `uce.h5`, then upload each and compare sizes:
-```bash
-D=s3://ucsc-brainexplorer/<ATLAS_DIR>_<reference_uuid>
-for f in transform.json ipca_model.pkl d_hat.npy pumap_model.pkl prediction_obs.tsv.gz index.faiss; do
-    aws s3 cp --no-progress <ATLAS_DIR>/production/$f $D/$f; done
-aws s3 ls $D/
-```
-First reference done this way: HMBA v0.5 (`concensus_class`, `concensus_subclass`).
+Do it in five steps. `A=<ATLAS_DIR>`, `T=<tag>` of the PUMAP run you keep (e.g. `e5`), `U=<reference_uuid>`
+(the one in `metadata_summary.json`, the same as in the pyramid folder name):
+
+1. **Check the d_hat of the PUMAP run.** Open `$A/transform_$T.json`. If the map was trained on the plain `pca.h5`
+   (no correction) but the file names a `d_hat` (an old default of the notebook did that), ignore it and use
+   `no_correction/d_hat.npy` below. Step 4 shows which one is right.
+2. **Stage the files** in `$A/production/` (nothing else goes in that folder). `class,subclass` below are the columns
+   to predict: choose them per atlas (every column is predicted except `*_term_id`; an empty label counts as
+   `missing_label`):
+   ```bash
+   mkdir -p $A/production
+   cp $A/pytorch_$T.pkl $A/production/pumap_model.pkl
+   cp $A/ipca_model.pkl $A/production/ipca_model.pkl
+   cp $FMW/no_correction/d_hat.npy $A/production/d_hat.npy          # or your correction directions
+   aws s3 cp s3://latentbrain/$A/index.faiss $A/production/index.faiss
+   python3 - <<EOF
+   import json, pandas as pd
+   t = json.load(open("$A/transform_$T.json"))
+   t.update(pumap_model_file="pumap_model.pkl", pca_model_file="ipca_model.pkl", d_hat="d_hat.npy")
+   json.dump(t, open("$A/production/transform.json", "w"), indent=2)
+   cols = ["class", "subclass"]                                        # <- the columns to predict
+   pd.read_csv("$A/obs_annotated.tsv.gz", sep="\t", usecols=cols, dtype=str, keep_default_na=False)[cols] \
+     .to_csv("$A/production/prediction_obs.tsv.gz", sep="\t", index=False)
+   EOF
+   ```
+3. **Check the row order:** `obs_annotated.tsv.gz` must be in the same order as `obs.tsv.gz` (its `new_index`
+   column equals the first column of `obs.tsv.gz`), which is the order of `uce.h5` and `index.faiss`.
+4. **Check that the six files reproduce the map:** `verify_production.py` maps a few thousand rows of `uce.h5`
+   with only `production/` and compares them with `umap_$T.npy`; it also checks the row count of
+   `prediction_obs.tsv.gz` (it needs your `umap_pytorch` clone, or set `UMAP_PYTORCH`):
+   ```bash
+   python3 $FMW/verify_production.py $A umap_$T.npy 5000
+   ```
+   It must print `max |diff|` around 1e-5 and `OK`. A large difference usually means the wrong `d_hat`.
+5. **Upload** (the folder must be new and empty) and compare sizes:
+   ```bash
+   D=s3://ucsc-brainexplorer/${A}_$U
+   aws s3 ls $D/                                                      # empty
+   for f in transform.json ipca_model.pkl d_hat.npy pumap_model.pkl prediction_obs.tsv.gz index.faiss; do
+       aws s3 cp --no-progress $A/production/$f $D/$f; done
+   aws s3 ls $D/                                                      # six files, same sizes as production/
+   ```
+
+Done this way: HMBA v0.5 (`concensus_class`, `concensus_subclass`), the adult human atlases, and the adult mouse
+atlas `WMB_UCE_brain_768_bican_s2048_shuffle` (`class`, `subclass`; no correction).
 
 ## View mapped query data — `map_newdata.py`
 
